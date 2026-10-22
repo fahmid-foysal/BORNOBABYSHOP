@@ -1,0 +1,12 @@
+const router = require("express").Router();
+const { action } = require("../../lib/http");
+const { checkToken, authorize } = require("../../middleware/auth");
+const c = require("./purchases.controller");
+router.use(checkToken, authorize("PURCHASES"));
+router.get("/", action(c.list));
+router.get("/:id", action(c.detail));
+router.post("/", action(c.create));
+router.put("/:id", action(c.update));
+router.delete("/:id", action(c.remove));
+router.post("/:id/payments", action(c.payment));
+module.exports = router;

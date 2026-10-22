@@ -1,0 +1,13 @@
+module.exports = [
+  "USER_MODULE",
+  "MASTER_DATA",
+  "PRODUCTS",
+  "PRODUCT_COMBOS",
+  "PURCHASES",
+  "SALES",
+  "STOCK_ADJUSTMENTS",
+  "STEADFAST_PAYMENTS",
+  "INCOME",
+  "EXPENSE",
+  "REPORTS",
+];

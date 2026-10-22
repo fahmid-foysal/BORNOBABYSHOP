@@ -1,0 +1,3 @@
+order_ref,customer_name,customer_phone,customer_address,item_type,barcode,quantity,rate,discount,delivery_charge,paid_amount,payment_method_id,sales_employee_id,notes
+WEB-001,Jahid Hasan,01712345678,"Dhanmondi, Dhaka",product,A1B2C,2,,0,80,0,,,Call first
+WEB-001,Jahid Hasan,01712345678,"Dhanmondi, Dhaka",combo,D3E4F,1,,0,80,0,,,Call first

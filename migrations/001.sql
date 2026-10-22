@@ -1,0 +1,305 @@
+CREATE TABLE users (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(255) NOT NULL,
+ email VARCHAR(255) NOT NULL UNIQUE,
+ password VARCHAR(255) NOT NULL,
+ role VARCHAR(100) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE user_permissions (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ module_name VARCHAR(150) NOT NULL,
+ user_id BIGINT UNSIGNED NOT NULL,
+ UNIQUE KEY uq_user_module (user_id,module_name),
+ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE suppliers (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ supplier_name VARCHAR(255) NOT NULL,
+ supplier_phone VARCHAR(30)
+) ENGINE=InnoDB;
+
+CREATE TABLE categories (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ category_name VARCHAR(255) NOT NULL,
+ parent_category_id BIGINT UNSIGNED NULL,
+ FOREIGN KEY (parent_category_id) REFERENCES categories(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE products (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ barcode VARCHAR(100) UNIQUE,
+ product_name VARCHAR(255) NOT NULL,
+ description TEXT,
+ sale_price DECIMAL(15,2) NOT NULL DEFAULT 0,
+ purchase_price DECIMAL(15,2) NOT NULL DEFAULT 0,
+ avg_weight DECIMAL(15,3) DEFAULT 0,
+ default_delivery_charge DECIMAL(15,2) DEFAULT 0,
+ status VARCHAR(50) NOT NULL DEFAULT 'active',
+ supplier_id BIGINT UNSIGNED,
+ category_id BIGINT UNSIGNED,
+ FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT,
+ FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE product_images (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ product_id BIGINT UNSIGNED NOT NULL,
+ img_path VARCHAR(1024) NOT NULL,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE payment_methods (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ method VARCHAR(100) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE purchases (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ supplier_id BIGINT UNSIGNED NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ notes TEXT,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE purchase_items (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ purchase_id BIGINT UNSIGNED NOT NULL,
+ product_id BIGINT UNSIGNED NOT NULL,
+ quantity DECIMAL(15,3) NOT NULL,
+ rate DECIMAL(15,2) NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE RESTRICT,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE purchase_payouts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ purchase_id BIGINT UNSIGNED NOT NULL,
+ amount DECIMAL(15,2) NOT NULL,
+ payment_method_id BIGINT UNSIGNED NOT NULL,
+ notes TEXT,
+ status VARCHAR(50) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE RESTRICT,
+ FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE product_combos (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ barcode VARCHAR(100) UNIQUE,
+ combo_name VARCHAR(255) NOT NULL,
+ description TEXT,
+ sale_price DECIMAL(15,2) NOT NULL DEFAULT 0,
+ delivery_charge DECIMAL(15,2) NOT NULL DEFAULT 0
+) ENGINE=InnoDB;
+
+CREATE TABLE product_combo_items (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ product_combo_id BIGINT UNSIGNED NOT NULL,
+ product_id BIGINT UNSIGNED NOT NULL,
+ UNIQUE KEY uq_combo_product (product_combo_id,product_id),
+ FOREIGN KEY (product_combo_id) REFERENCES product_combos(id) ON DELETE CASCADE,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE product_combo_images (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ product_combo_id BIGINT UNSIGNED NOT NULL,
+ img_path VARCHAR(1024) NOT NULL,
+ FOREIGN KEY (product_combo_id) REFERENCES product_combos(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE customers (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ cus_name VARCHAR(255) NOT NULL,
+ cus_phone VARCHAR(30),
+ cus_address TEXT
+) ENGINE=InnoDB;
+
+CREATE TABLE employees (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(255) NOT NULL,
+ phone VARCHAR(30),
+ `rank` VARCHAR(100),
+ salary DECIMAL(15,2) DEFAULT 0
+) ENGINE=InnoDB;
+
+CREATE TABLE offline_sales (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ customer_id BIGINT UNSIGNED NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ notes TEXT,
+ sales_employee_id BIGINT UNSIGNED NULL,
+ final_discount DECIMAL(15,2) NOT NULL DEFAULT 0,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+ FOREIGN KEY (sales_employee_id) REFERENCES employees(id) ON DELETE SET NULL,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE offline_sale_products (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ offline_sale_id BIGINT UNSIGNED NOT NULL,
+ product_id BIGINT UNSIGNED NOT NULL,
+ quantity DECIMAL(15,3) NOT NULL,
+ rate DECIMAL(15,2) NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ FOREIGN KEY (offline_sale_id) REFERENCES offline_sales(id) ON DELETE RESTRICT,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE offline_sale_combos (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ offline_sale_id BIGINT UNSIGNED NOT NULL,
+ product_combo_id BIGINT UNSIGNED NOT NULL,
+ quantity DECIMAL(15,3) NOT NULL,
+ rate DECIMAL(15,2) NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ FOREIGN KEY (offline_sale_id) REFERENCES offline_sales(id) ON DELETE RESTRICT,
+ FOREIGN KEY (product_combo_id) REFERENCES product_combos(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE offline_sale_payments (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ offline_sale_id BIGINT UNSIGNED NOT NULL,
+ payment_method_id BIGINT UNSIGNED NOT NULL,
+ amount DECIMAL(15,2) NOT NULL,
+ notes TEXT,
+ status VARCHAR(50) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (offline_sale_id) REFERENCES offline_sales(id) ON DELETE RESTRICT,
+ FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE online_sales (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ customer_id BIGINT UNSIGNED NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ notes TEXT,
+ sent_to_steadfast BOOLEAN NOT NULL DEFAULT FALSE,
+ delivery_charge DECIMAL(15,2) NOT NULL DEFAULT 0,
+ sales_employee_id BIGINT UNSIGNED NULL,
+ steadfast_tracking_link VARCHAR(1024),
+ steadfast_consignment_id BIGINT,
+ steadfast_tracking_code VARCHAR(150),
+ steadfast_cod_amount DECIMAL(15,2) DEFAULT 0,
+ steadfast_note TEXT,
+ steadfast_status VARCHAR(100),
+ steadfast_delivery_charge DECIMAL(15,2) DEFAULT 0,
+ final_discount DECIMAL(15,2) NOT NULL DEFAULT 0,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+ FOREIGN KEY (sales_employee_id) REFERENCES employees(id) ON DELETE SET NULL,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+ INDEX idx_steadfast_consignment (steadfast_consignment_id),
+ INDEX idx_steadfast_tracking (steadfast_tracking_code)
+) ENGINE=InnoDB;
+
+CREATE TABLE online_sale_products (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ online_sale_id BIGINT UNSIGNED NOT NULL,
+ product_id BIGINT UNSIGNED NOT NULL,
+ quantity DECIMAL(15,3) NOT NULL,
+ rate DECIMAL(15,2) NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ FOREIGN KEY (online_sale_id) REFERENCES online_sales(id) ON DELETE RESTRICT,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE online_sale_products (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ online_sale_id BIGINT UNSIGNED NOT NULL,
+ product_combo_id BIGINT UNSIGNED NOT NULL,
+ quantity DECIMAL(15,3) NOT NULL,
+ rate DECIMAL(15,2) NOT NULL,
+ status VARCHAR(50) NOT NULL,
+ FOREIGN KEY (online_sale_id) REFERENCES online_sales(id) ON DELETE RESTRICT,
+ FOREIGN KEY (product_combo_id) REFERENCES product_combos(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE online_sale_payments (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ online_sale_id BIGINT UNSIGNED NOT NULL,
+ payment_method_id BIGINT UNSIGNED NOT NULL,
+ amount DECIMAL(15,2) NOT NULL,
+ notes TEXT,
+ status VARCHAR(50) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (online_sale_id) REFERENCES online_sales(id) ON DELETE RESTRICT,
+ FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE expense_accounts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ title VARCHAR(255) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE income_accounts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ title VARCHAR(255) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE expenses (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ expense_account_id BIGINT UNSIGNED NOT NULL,
+ narration TEXT,
+ amount DECIMAL(15,2) NOT NULL,
+ expense_date DATE NOT NULL,
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (expense_account_id) REFERENCES expense_accounts(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE incomes (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ income_account_id BIGINT UNSIGNED NOT NULL,
+ narration TEXT,
+ amount DECIMAL(15,2) NOT NULL,
+ income_date DATE NOT NULL,
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (income_account_id) REFERENCES income_accounts(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE steadfast_payments (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ steadfast_payment_id VARCHAR(150),
+ status VARCHAR(100),
+ amount DECIMAL(15,2) NOT NULL,
+ method VARCHAR(100),
+ steadfast_status_label VARCHAR(255),
+ steadfast_created_at DATETIME,
+ steadfast_ready_at DATETIME,
+ steadfast_paid_at DATETIME,
+ steadfast_settled_orders_details JSON,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ INDEX idx_steadfast_payment_id (steadfast_payment_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE stock_adjustments (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ product_id BIGINT UNSIGNED NOT NULL,
+ quantity DECIMAL(15,3) NOT NULL,
+ reason TEXT,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+ FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;

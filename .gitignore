@@ -147,3 +147,12 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# BornoBabyShop runtime and local configuration
+backend/.env
+frontend/.env
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/dist/
+frontend/test-results/
+frontend/playwright-report/

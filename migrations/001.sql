@@ -219,7 +219,7 @@ CREATE TABLE online_sale_products (
  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
-CREATE TABLE online_sale_products (
+CREATE TABLE online_sale_combos (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  online_sale_id BIGINT UNSIGNED NOT NULL,
  product_combo_id BIGINT UNSIGNED NOT NULL,

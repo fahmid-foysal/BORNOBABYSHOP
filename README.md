@@ -26,6 +26,8 @@ Open `http://localhost:5173`. Vite proxies `/api`, `/uploads`, and `/health` to 
 
 Seed creates an administrator and Cash, bKash, Nagad, Bank, and Steadfast payment methods. It never resets an existing password. Ordinary users are created in **Users & permissions**, with role `user` and checked modules. API authorization checks the database on every request. Password or permission changes invalidate previous sessions. The dashboard belongs to `REPORTS`. Master Data also includes income accounts and sales employees, needed for accounting and team reports.
 
+If shell access is unavailable on a new installation, temporarily set `ENABLE_ADMIN_BOOTSTRAP=true` and send `POST /api/auth/bootstrap-admin` with JSON fields `name`, `email`, and a password of at least 12 characters. The endpoint is unauthenticated but rate-limited, works only while no administrator exists, and returns 404 when disabled. Set the flag back to `false` immediately after the account is created.
+
 ## Sample data
 
 Run `npm run seed:demo` from `backend` to insert the sample dataset once. It adds 24 products, 4 combos, 13 categories, 3 suppliers, 3 sales employees, 3 purchases, 30 offline sales (paid/due/returned), stock adjustments, expenses, and income. Records are marked `[Demo]` or `BORNO_DEMO_V1`. Existing users and passwords are preserved. Online sales and courier records are untouched, and no external APIs are called. Rerunning skips the existing batch.

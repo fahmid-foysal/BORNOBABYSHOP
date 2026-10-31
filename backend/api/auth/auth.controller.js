@@ -1,5 +1,6 @@
 const s = require("./auth.service");
 exports.login = (req) => s.login(req.body);
+exports.bootstrapAdmin = (req) => s.bootstrapAdmin(req.body);
 exports.profile = (req) => req.user;
 exports.modules = () => require("../../lib/modules");
 exports.list = (req) => s.list(req.query);

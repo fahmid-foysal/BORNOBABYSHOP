@@ -8,6 +8,11 @@ router.post(
   rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 }),
   action(c.login),
 );
+router.post(
+  "/bootstrap-admin",
+  rateLimit({ windowMs: 15 * 60 * 1000, limit: 5 }),
+  action(c.bootstrapAdmin),
+);
 router.use(checkToken);
 router.get("/me", action(c.profile));
 router.get("/modules", action(c.modules));

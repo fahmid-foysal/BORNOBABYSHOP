@@ -11,6 +11,11 @@ const {
   pageResult,
 } = require("../../lib/http");
 const modules = require("../../lib/modules");
+const bootstrapAdminSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().email().max(255),
+  password: z.string().min(12).max(128),
+});
 const userSchema = z.object({
   name: z.string().trim().min(1).max(255),
   email: z.string().trim().email().max(255),
@@ -42,6 +47,35 @@ exports.login = async (body) => {
     ),
     user,
   };
+};
+exports.bootstrapAdmin = async (raw) => {
+  if (process.env.ENABLE_ADMIN_BOOTSTRAP !== "true")
+    throw new HttpError(404, "API route not found");
+
+  const body = bootstrapAdminSchema.parse(raw);
+
+  return transaction(async (db) => {
+    const [admins] = await db.query(
+      "SELECT id FROM users WHERE role='admin' LIMIT 1 FOR UPDATE",
+    );
+    if (admins.length)
+      throw new HttpError(409, "An administrator account already exists");
+
+    const admin = {
+      name: body.name,
+      email: body.email,
+      password: await bcrypt.hash(body.password, 12),
+      role: "admin",
+    };
+    const adminId = await insert(db, "users", admin);
+
+    return {
+      id: adminId,
+      name: admin.name,
+      email: admin.email,
+      role: admin.role,
+    };
+  });
 };
 exports.list = async (q) => {
   const p = pagination(q);

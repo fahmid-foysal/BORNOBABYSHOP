@@ -84,6 +84,7 @@ export default function SalesList() {
   const [busy, setBusy] = useState(false);
   const [refreshingId, setRefreshingId] = useState(null);
   const [returnSelection, setReturnSelection] = useState({});
+  const [returnRefund, setReturnRefund] = useState(null);
   const {
     data,
     loading,
@@ -125,10 +126,12 @@ export default function SalesList() {
   function open(mode, row) {
     setDialog({ mode, row });
     setError("");
-    if (mode === "return")
+    if (mode === "return") {
       setReturnSelection(
         Object.fromEntries(row.items.map((item) => [returnKey(item), 0])),
       );
+      setReturnRefund(null);
+    }
   }
   async function submit(e) {
     e.preventDefault();
@@ -147,6 +150,7 @@ export default function SalesList() {
                 }))
                 .filter((item) => item.quantity > 0),
               payment_method_id: fields.get("payment_method_id") || null,
+              refund_amount: Number(fields.get("refund_amount") || 0),
               notes: fields.get("notes") || null,
             }
           : Object.fromEntries(fields);
@@ -542,6 +546,10 @@ export default function SalesList() {
                       dialog.row,
                       returnSelection,
                     );
+                    const refundToRecord =
+                      returnRefund === null
+                        ? estimate.refund
+                        : Math.max(0, Number(returnRefund) || 0);
                     return (
                       <>
                         <div className="info-note">
@@ -621,21 +629,42 @@ export default function SalesList() {
                             <strong>{money(estimate.remainingPayable)}</strong>
                           </div>
                           <div className="refund-total">
-                            <span>Refund to record</span>
+                            <span>Calculated refund</span>
                             <strong>{money(estimate.refund)}</strong>
                           </div>
                         </div>
                         <Field
+                          label="Refund amount"
+                          hint={`Editable. The calculated refund is ${money(estimate.refund)} and the maximum is ${money(dialog.row.paid)}.`}
+                        >
+                          <input
+                            name="refund_amount"
+                            type="number"
+                            min="0"
+                            max={dialog.row.paid}
+                            step="0.01"
+                            value={
+                              returnRefund === null
+                                ? estimate.refund
+                                : returnRefund
+                            }
+                            onChange={(event) =>
+                              setReturnRefund(event.target.value)
+                            }
+                            required
+                          />
+                        </Field>
+                        <Field
                           label="Refund payment method"
                           hint={
-                            estimate.refund > 0
+                            refundToRecord > 0
                               ? "Required because money will be refunded."
-                              : "No payment entry is created when the calculated refund is zero."
+                              : "No payment entry is created when the refund is zero."
                           }
                         >
                           <select
                             name="payment_method_id"
-                            required={estimate.refund > 0}
+                            required={refundToRecord > 0}
                             defaultValue={
                               dialog.row.payments[0]?.payment_method_id || ""
                             }

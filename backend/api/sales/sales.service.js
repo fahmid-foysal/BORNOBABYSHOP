@@ -350,6 +350,7 @@ exports.returnSale = async (c, key, raw, user) => {
         .optional(),
       payment_method_id: id.nullable().optional(),
       notes: z.string().trim().max(5000).nullable().optional(),
+      refund_amount: amount.optional(),
       amount: amount.optional(),
     })
     .parse(raw);
@@ -426,9 +427,17 @@ exports.returnSale = async (c, key, raw, user) => {
     const remainingPayable = round(
       Math.max(0, remainingSubtotal - remainingDiscount + remainingDelivery),
     );
-    const refundAmount = round(
+    const calculatedRefundAmount = round(
       Math.max(0, Number(state.paid) - remainingPayable),
     );
+    const refundAmount = round(
+      b.refund_amount ?? b.amount ?? calculatedRefundAmount,
+    );
+    if (refundAmount > Number(state.paid))
+      throw new HttpError(
+        400,
+        "Refund amount cannot exceed the amount paid on this order",
+      );
     if (refundAmount > 0 && !b.payment_method_id)
       throw new HttpError(400, "Select a payment method for the refund");
 
@@ -553,6 +562,7 @@ exports.returnSale = async (c, key, raw, user) => {
       returned_gross: returnedGross,
       allocated_discount: allocatedDiscount,
       delivery_refund: deliveryRefund,
+      calculated_refund_amount: calculatedRefundAmount,
       refund_amount: refundAmount,
       remaining_payable: remainingPayable,
     };

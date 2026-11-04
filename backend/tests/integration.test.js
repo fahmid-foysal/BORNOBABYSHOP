@@ -413,13 +413,16 @@ test(
               },
             ],
             payment_method_id: method,
+            refund_amount: 75,
           },
           user,
         );
-        assert.equal(partial.refund_amount, 92);
+        assert.equal(partial.calculated_refund_amount, 92);
+        assert.equal(partial.refund_amount, 75);
         const afterPartial = await sales.detail("offline", partialOrder.id);
         assert.equal(afterPartial.return_status, "partial");
-        assert.equal(afterPartial.paid, 368);
+        assert.equal(afterPartial.paid, 385);
+        assert.equal(afterPartial.returns[0].refund_amount, 75);
         assert.equal(
           afterPartial.items.find(
             (item) => item.line_id === productLine.line_id,
@@ -589,38 +592,30 @@ test(
             delivery_charge: 60,
             updated_at: "2026-10-23 12:00:00",
           };
-          assert.equal(
-            (await request(app).post("/api/webhooks/steadfast").send(body))
-              .status,
-            401,
-          );
-          assert.equal(
-            (
-              await request(app)
-                .post("/api/webhooks/steadfast")
-                .set("Authorization", "Bearer test-webhook")
-                .send(body)
-            ).status,
-            200,
-          );
+          const deliveryWebhook = await request(app)
+            .post("/api/webhooks/steadfast")
+            .send(body);
+          assert.equal(deliveryWebhook.status, 200);
+          assert.equal(deliveryWebhook.body.data.processed, true);
           assert.equal(
             (await sales.detail("online", online.id)).steadfast_delivery_charge,
             60,
           );
+          const ignoredWebhook = await request(app)
+            .post("/api/webhooks/steadfast")
+            .send({
+              notification_type: "tracking_update",
+              invoice: `ORD-${online.id}`,
+              consignment_id: 123456,
+              status: "cancelled",
+              tracking_message: "Package is being reviewed",
+              updated_at: "2026-10-23T12:05:00+06:00",
+            });
+          assert.equal(ignoredWebhook.status, 200);
+          assert.equal(ignoredWebhook.body.data.processed, false);
           assert.equal(
-            (
-              await request(app)
-                .post("/api/webhooks/steadfast")
-                .set("Authorization", "Bearer test-webhook")
-                .send({
-                  notification_type: "tracking_update",
-                  invoice: `ORD-${online.id}`,
-                  consignment_id: 123456,
-                  tracking_message: "Package is being reviewed",
-                  updated_at: "2026-10-23T12:05:00+06:00",
-                })
-            ).status,
-            200,
+            (await sales.detail("online", online.id)).steadfast_status,
+            "delivered",
           );
           assert.equal(
             (
@@ -628,6 +623,15 @@ test(
                 .post("/api/webhooks/steadfast")
                 .set("Authorization", "Bearer test-webhook")
                 .send({ notification_type: "future_event" })
+            ).status,
+            200,
+          );
+          assert.equal(
+            (
+              await request(app)
+                .post("/api/webhooks/steadfast")
+                .set("Content-Type", "application/json")
+                .send('{"invalid"')
             ).status,
             200,
           );

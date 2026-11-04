@@ -226,6 +226,12 @@ exports.webhook = async (raw) => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw))
     return acknowledge(false, "Payload is not an object");
 
+  const notificationType = String(raw.notification_type || "")
+    .trim()
+    .toLowerCase();
+  if (notificationType !== "delivery_status")
+    return acknowledge(false, "Webhook type ignored");
+
   const invoice = String(raw.invoice || "").trim();
   const invoiceMatch = invoice.match(/^ORD-(\d+)$/);
   const consignmentId = Number(raw.consignment_id);

@@ -188,6 +188,22 @@ app.use((err, req, res, next) => {
     return next(err);
   }
 
+  if (
+    req.method === "POST" &&
+    req.path === "/api/webhooks/steadfast"
+  ) {
+    console.warn("Ignored unparseable Steadfast webhook:", err.message);
+    return res.status(200).json({
+      success: true,
+      data: {
+        status: "success",
+        message: "Webhook received successfully",
+        processed: false,
+        reason: "Payload could not be parsed",
+      },
+    });
+  }
+
   let status = err.status || 500;
   let message = err.message;
 

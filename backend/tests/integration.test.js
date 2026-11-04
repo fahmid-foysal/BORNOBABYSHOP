@@ -370,6 +370,81 @@ test(
       );
     });
     await t.test(
+      "partial returns restore selected quantities and calculate refunds",
+      async () => {
+        const beforeStock = (await catalog.detail("products", productA.id))
+          .stock;
+        const partialOrder = await sales.create(
+          "offline",
+          {
+            customer,
+            items: [
+              {
+                item_type: "product",
+                item_id: productA.id,
+                quantity: 2,
+                rate: 100,
+              },
+              {
+                item_type: "product",
+                item_id: productB.id,
+                quantity: 2,
+                rate: 150,
+              },
+            ],
+            final_discount: 40,
+            paid_amount: 460,
+            payment_method_id: method,
+          },
+          user,
+        );
+        const productLine = partialOrder.items.find(
+          (item) => String(item.item_id) === String(productA.id),
+        );
+        const partial = await sales.returnSale(
+          "offline",
+          partialOrder.id,
+          {
+            items: [
+              {
+                item_type: "product",
+                line_id: productLine.line_id,
+                quantity: 1,
+              },
+            ],
+            payment_method_id: method,
+          },
+          user,
+        );
+        assert.equal(partial.refund_amount, 92);
+        const afterPartial = await sales.detail("offline", partialOrder.id);
+        assert.equal(afterPartial.return_status, "partial");
+        assert.equal(afterPartial.paid, 368);
+        assert.equal(
+          afterPartial.items.find(
+            (item) => item.line_id === productLine.line_id,
+          ).quantity,
+          1,
+        );
+        assert.equal(
+          (await catalog.detail("products", productA.id)).stock,
+          beforeStock - 1,
+        );
+        const completed = await sales.returnSale(
+          "offline",
+          partialOrder.id,
+          { payment_method_id: method },
+          user,
+        );
+        assert.equal(completed.full_return, true);
+        assert.equal((await sales.detail("offline", partialOrder.id)).paid, 0);
+        assert.equal(
+          (await catalog.detail("products", productA.id)).stock,
+          beforeStock,
+        );
+      },
+    );
+    await t.test(
       "collect balance, return sale once and restore stock",
       async () => {
         await sales.addPayment(
@@ -488,6 +563,23 @@ test(
           );
           assert.equal(online.sent_to_steadfast, 1);
           assert.equal(online.steadfast_cod_amount, 130);
+          global.fetch = async (url, opts) => {
+            assert.match(url, /status_by_cid\/123456$/);
+            assert.equal(opts.method, "GET");
+            return {
+              ok: true,
+              json: async () => ({
+                status: 200,
+                delivery_status: "In Review",
+              }),
+            };
+          };
+          const refreshed = await request(app)
+            .get(`/api/sales/online/${online.id}/refresh-steadfast`)
+            .set("Authorization", `Bearer ${token}`);
+          assert.equal(refreshed.status, 200);
+          assert.equal(refreshed.body.data.status, 200);
+          assert.equal(refreshed.body.data.delivery_status, "In Review");
           await assert.rejects(() => steadfast.send([online.id]), /already/);
           const body = {
             notification_type: "delivery_status",
@@ -515,6 +607,49 @@ test(
             (await sales.detail("online", online.id)).steadfast_delivery_charge,
             60,
           );
+          assert.equal(
+            (
+              await request(app)
+                .post("/api/webhooks/steadfast")
+                .set("Authorization", "Bearer test-webhook")
+                .send({
+                  notification_type: "tracking_update",
+                  invoice: `ORD-${online.id}`,
+                  consignment_id: 123456,
+                  tracking_message: "Package is being reviewed",
+                  updated_at: "2026-10-23T12:05:00+06:00",
+                })
+            ).status,
+            200,
+          );
+          assert.equal(
+            (
+              await request(app)
+                .post("/api/webhooks/steadfast")
+                .set("Authorization", "Bearer test-webhook")
+                .send({ notification_type: "future_event" })
+            ).status,
+            200,
+          );
+          assert.equal(
+            (
+              await request(app)
+                .post("/api/webhooks/steadfast")
+                .set("Authorization", "Bearer test-webhook")
+                .send({
+                  notification_type: "delivery_status",
+                  invoice: `ORD-${online.id}`,
+                  consignment_id: 123456,
+                  status_type: "In Review",
+                  delivery_fee: "65.00",
+                  updated_at: "2026-10-23T12:10:00+06:00",
+                })
+            ).status,
+            200,
+          );
+          const reviewed = await sales.detail("online", online.id);
+          assert.equal(reviewed.steadfast_status, "In Review");
+          assert.equal(reviewed.steadfast_delivery_charge, 65);
         },
       );
       await t.test(

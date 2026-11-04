@@ -169,36 +169,118 @@ exports.reconcile = async (key, raw) => {
     return { linked: true };
   });
 };
-exports.webhook = async (raw) => {
-  const b = z
+exports.refreshStatus = async (key) => {
+  const saleId = id.parse(key);
+  const sale = await one(
+    pool,
+    "SELECT id,steadfast_consignment_id FROM online_sales WHERE id=?",
+    [saleId],
+  );
+  if (!sale.steadfast_consignment_id)
+    throw new HttpError(
+      409,
+      "This order does not have a Steadfast consignment ID",
+    );
+
+  const response = z
     .object({
-      notification_type: z.literal("delivery_status"),
-      consignment_id: id,
-      invoice: z.string().regex(/^ORD-\d+$/),
-      status: z.string().min(1).max(100),
-      delivery_charge: amount,
-      updated_at: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+      status: z.coerce.number().int(),
+      delivery_status: z.string().trim().min(1).max(100),
     })
     .passthrough()
-    .parse(raw);
-  return transaction(async (db) => {
-    const key = b.invoice.slice(4);
-    const s = await one(
+    .parse(
+      await request(
+        `/status_by_cid/${encodeURIComponent(sale.steadfast_consignment_id)}`,
+      ),
+    );
+  if (response.status !== 200)
+    throw new HttpError(502, "Steadfast did not return a successful status");
+  const deliveryStatus = response.delivery_status;
+
+  await transaction(async (db) => {
+    const current = await one(
       db,
+      "SELECT steadfast_consignment_id FROM online_sales WHERE id=? FOR UPDATE",
+      [saleId],
+    );
+    if (
+      String(current.steadfast_consignment_id) !==
+      String(sale.steadfast_consignment_id)
+    )
+      throw new HttpError(409, "The order consignment changed during refresh");
+    await db.query(
+      "UPDATE online_sales SET steadfast_status=?,steadfast_last_error=NULL WHERE id=?",
+      [deliveryStatus, saleId],
+    );
+  });
+  return response;
+};
+exports.webhook = async (raw) => {
+  const acknowledge = (processed, reason) => ({
+    status: "success",
+    message: "Webhook received successfully",
+    processed,
+    ...(reason ? { reason } : {}),
+  });
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return acknowledge(false, "Payload is not an object");
+
+  const invoice = String(raw.invoice || "").trim();
+  const invoiceMatch = invoice.match(/^ORD-(\d+)$/);
+  const consignmentId = Number(raw.consignment_id);
+  const status = String(raw.status_type || raw.status || "")
+    .trim()
+    .slice(0, 100);
+
+  if (
+    !invoiceMatch ||
+    !Number.isSafeInteger(consignmentId) ||
+    consignmentId <= 0 ||
+    !status
+  )
+    return acknowledge(false, "Event does not contain a processable status");
+
+  const chargeValue = raw.delivery_charge ?? raw.delivery_fee;
+  const parsedCharge = chargeValue == null ? null : Number(chargeValue);
+  const deliveryCharge =
+    parsedCharge != null && Number.isFinite(parsedCharge) && parsedCharge >= 0
+      ? Math.round(parsedCharge * 100) / 100
+      : null;
+
+  const timestamp = String(raw.updated_at || "").trim();
+  const timestampMatch = timestamp.match(
+    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/,
+  );
+  const updatedAt = timestampMatch
+    ? `${timestampMatch[1]} ${timestampMatch[2]}`
+    : null;
+
+  return transaction(async (db) => {
+    const key = invoiceMatch[1];
+    const [sales] = await db.query(
       "SELECT id,steadfast_consignment_id,steadfast_webhook_at FROM online_sales WHERE id=? FOR UPDATE",
       [key],
     );
+    if (!sales.length) return acknowledge(false, "Order was not found");
+
+    const s = sales[0];
     if (
       s.steadfast_consignment_id &&
-      String(s.steadfast_consignment_id) !== String(b.consignment_id)
+      String(s.steadfast_consignment_id) !== String(consignmentId)
     )
-      throw new HttpError(409, "Invoice and consignment do not match");
-    if (!s.steadfast_webhook_at || b.updated_at >= s.steadfast_webhook_at)
+      return acknowledge(false, "Invoice and consignment do not match");
+
+    if (
+      !s.steadfast_webhook_at ||
+      !updatedAt ||
+      updatedAt >= s.steadfast_webhook_at
+    )
       await db.query(
-        "UPDATE online_sales SET steadfast_status=?,steadfast_delivery_charge=?,steadfast_webhook_at=? WHERE id=?",
-        [b.status, b.delivery_charge, b.updated_at, key],
+        "UPDATE online_sales SET steadfast_status=?,steadfast_delivery_charge=COALESCE(?,steadfast_delivery_charge),steadfast_webhook_at=COALESCE(?,NOW()) WHERE id=?",
+        [status, deliveryCharge, updatedAt, key],
       );
-    return { message: "Webhook received successfully" };
+    return acknowledge(true);
   });
 };
 exports.importPayment = async (paymentId, user) => {

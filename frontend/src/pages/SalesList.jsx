@@ -10,6 +10,7 @@ import {
   ExternalLink,
   List,
   Link2,
+  RefreshCw,
 } from "lucide-react";
 import { api, qs, money, defaultDates } from "../api";
 import {
@@ -26,6 +27,50 @@ import {
   DateRange,
 } from "../components";
 import { Receipt } from "../receipt";
+const returnKey = (item) => `${item.item_type}:${item.line_id}`;
+const roundMoney = (value) =>
+  Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+function estimateReturn(row, selection) {
+  const selectedGross = roundMoney(
+    row.items.reduce(
+      (sum, item) =>
+        sum +
+        Math.min(
+          Number(item.quantity),
+          Math.max(0, Number(selection[returnKey(item)]) || 0),
+        ) *
+          Number(item.rate),
+      0,
+    ),
+  );
+  const fullReturn =
+    row.items.length > 0 &&
+    row.items.every(
+      (item) => Number(selection[returnKey(item)]) === Number(item.quantity),
+    );
+  const allocatedDiscount = fullReturn
+    ? Number(row.discount)
+    : roundMoney(
+        Number(row.discount) *
+          (selectedGross / Math.max(Number(row.subtotal), selectedGross || 1)),
+      );
+  const remainingPayable = roundMoney(
+    Math.max(
+      0,
+      Number(row.subtotal) -
+        selectedGross -
+        (Number(row.discount) - allocatedDiscount) +
+        (fullReturn ? 0 : Number(row.delivery_charge || 0)),
+    ),
+  );
+  return {
+    selectedGross,
+    allocatedDiscount,
+    fullReturn,
+    remainingPayable,
+    refund: roundMoney(Math.max(0, Number(row.paid) - remainingPayable)),
+  };
+}
 export default function SalesList() {
   const { lookups, notify } = useApp();
   const [channel, setChannel] = useState("offline");
@@ -37,6 +82,8 @@ export default function SalesList() {
   const [dialog, setDialog] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refreshingId, setRefreshingId] = useState(null);
+  const [returnSelection, setReturnSelection] = useState({});
   const {
     data,
     loading,
@@ -61,16 +108,48 @@ export default function SalesList() {
       setBusy(false);
     }
   }
+  async function refreshSteadfast(row) {
+    setRefreshingId(row.id);
+    try {
+      const result = await api(`/sales/online/${row.id}/refresh-steadfast`);
+      notify(
+        `Steadfast status: ${result.delivery_status.replaceAll("_", " ")}`,
+      );
+      setVersion((v) => v + 1);
+    } catch (e) {
+      notify(e.message, "error");
+    } finally {
+      setRefreshingId(null);
+    }
+  }
   function open(mode, row) {
     setDialog({ mode, row });
     setError("");
+    if (mode === "return")
+      setReturnSelection(
+        Object.fromEntries(row.items.map((item) => [returnKey(item), 0])),
+      );
   }
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const body = Object.fromEntries(new FormData(e.target));
+      const fields = new FormData(e.target);
+      const body =
+        dialog.mode === "return"
+          ? {
+              items: dialog.row.items
+                .map((item) => ({
+                  item_type: item.item_type,
+                  line_id: item.line_id,
+                  quantity: Number(returnSelection[returnKey(item)]) || 0,
+                }))
+                .filter((item) => item.quantity > 0),
+              payment_method_id: fields.get("payment_method_id") || null,
+              notes: fields.get("notes") || null,
+            }
+          : Object.fromEntries(fields);
       const endpoint =
         dialog.mode === "reconcile"
           ? `/sales/online/${dialog.row.id}/reconcile-steadfast`
@@ -78,7 +157,7 @@ export default function SalesList() {
       await api(endpoint, { method: "POST", body });
       notify(
         dialog.mode === "return"
-          ? "Order returned and stock restored"
+          ? "Selected items returned, refund recorded, and stock restored"
           : dialog.mode === "reconcile"
             ? "Courier details linked"
             : "Payment recorded",
@@ -191,6 +270,12 @@ export default function SalesList() {
                                 <b className="tag">Combo</b>
                               )}
                             </span>
+                            {Number(i.returned_quantity) > 0 && (
+                              <small className="text-danger">
+                                Returned: {i.returned_quantity} of{" "}
+                                {i.sold_quantity}
+                              </small>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -219,7 +304,14 @@ export default function SalesList() {
                     </td>
                     <td>{row.sales_person_name || "Unassigned"}</td>
                     <td>
-                      <Badge>{row.status}</Badge>
+                      <Badge>
+                        {row.return_status === "partial"
+                          ? "partial_return"
+                          : row.status}
+                      </Badge>
+                      {row.return_status === "partial" && (
+                        <small>Payment: {row.status}</small>
+                      )}
                     </td>
                     {channel === "online" && (
                       <td>
@@ -233,6 +325,23 @@ export default function SalesList() {
                             {money(row.steadfast_delivery_charge)}
                           </small>
                           <small>COD: {money(row.steadfast_cod_amount)}</small>
+                          {row.steadfast_consignment_id && (
+                            <button
+                              className="btn small-btn courier-refresh"
+                              disabled={refreshingId === row.id}
+                              onClick={() => refreshSteadfast(row)}
+                            >
+                              <RefreshCw
+                                size={12}
+                                className={
+                                  refreshingId === row.id ? "spin" : ""
+                                }
+                              />
+                              {refreshingId === row.id
+                                ? "Refreshing"
+                                : "Refresh status"}
+                            </button>
+                          )}
                           {row.steadfast_tracking_link &&
                             /^https:\/\//.test(row.steadfast_tracking_link) && (
                               <a
@@ -280,7 +389,7 @@ export default function SalesList() {
                             </button>
                             <button
                               className="icon-btn danger"
-                              title="Return full order"
+                              title="Return selected items"
                               onClick={() => open("return", row)}
                             >
                               <Undo2 size={16} />
@@ -330,7 +439,11 @@ export default function SalesList() {
         <Modal
           title={`${dialog.mode === "detail" ? "Order" : dialog.mode === "payments" ? "Payment history" : dialog.mode === "return" ? "Return order" : dialog.mode === "reconcile" ? "Reconcile Steadfast dispatch" : "Add payment"} · ${channel === "online" ? "ORD" : "POS"}-${dialog.row.id}`}
           onClose={() => !busy && setDialog(null)}
-          wide={dialog.mode === "detail" || dialog.mode === "payments"}
+          wide={
+            dialog.mode === "detail" ||
+            dialog.mode === "payments" ||
+            dialog.mode === "return"
+          }
         >
           {dialog.mode === "detail" ? (
             <>
@@ -423,35 +536,132 @@ export default function SalesList() {
                       required
                     />
                   </>
+                ) : dialog.mode === "return" ? (
+                  (() => {
+                    const estimate = estimateReturn(
+                      dialog.row,
+                      returnSelection,
+                    );
+                    return (
+                      <>
+                        <div className="info-note">
+                          Select the products or combos and quantities being
+                          returned. Stock and the proportional order discount
+                          are recalculated automatically.
+                        </div>
+                        <div className="table-scroll return-items">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Item</th>
+                                <th>Available</th>
+                                <th>Return quantity</th>
+                                <th>Value</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {dialog.row.items
+                                .filter((item) => Number(item.quantity) > 0)
+                                .map((item) => {
+                                  const key = returnKey(item);
+                                  const quantity =
+                                    Number(returnSelection[key]) || 0;
+                                  return (
+                                    <tr key={key}>
+                                      <td>
+                                        <strong>{item.item_name}</strong>
+                                        {item.item_type === "combo" && (
+                                          <small>Combo</small>
+                                        )}
+                                      </td>
+                                      <td>{item.quantity}</td>
+                                      <td>
+                                        <input
+                                          aria-label={`Return quantity for ${item.item_name}`}
+                                          type="number"
+                                          min="0"
+                                          max={item.quantity}
+                                          step="0.001"
+                                          value={returnSelection[key] ?? 0}
+                                          onChange={(event) =>
+                                            setReturnSelection((current) => ({
+                                              ...current,
+                                              [key]: Math.min(
+                                                Number(item.quantity),
+                                                Math.max(
+                                                  0,
+                                                  Number(event.target.value) ||
+                                                    0,
+                                                ),
+                                              ),
+                                            }))
+                                          }
+                                        />
+                                      </td>
+                                      <td>
+                                        {money(quantity * Number(item.rate))}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="return-summary">
+                          <div>
+                            <span>Selected merchandise</span>
+                            <strong>{money(estimate.selectedGross)}</strong>
+                          </div>
+                          <div>
+                            <span>Allocated discount</span>
+                            <strong>{money(estimate.allocatedDiscount)}</strong>
+                          </div>
+                          <div>
+                            <span>Remaining payable</span>
+                            <strong>{money(estimate.remainingPayable)}</strong>
+                          </div>
+                          <div className="refund-total">
+                            <span>Refund to record</span>
+                            <strong>{money(estimate.refund)}</strong>
+                          </div>
+                        </div>
+                        <Field
+                          label="Refund payment method"
+                          hint={
+                            estimate.refund > 0
+                              ? "Required because money will be refunded."
+                              : "No payment entry is created when the calculated refund is zero."
+                          }
+                        >
+                          <select
+                            name="payment_method_id"
+                            required={estimate.refund > 0}
+                            defaultValue={
+                              dialog.row.payments[0]?.payment_method_id || ""
+                            }
+                          >
+                            <option value="">Select…</option>
+                            {lookups.payment_methods?.map((method) => (
+                              <option key={method.id} value={method.id}>
+                                {method.method}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Return notes" name="notes" />
+                      </>
+                    );
+                  })()
                 ) : (
                   <>
-                    {dialog.mode === "return" && (
-                      <div className="info-note">
-                        This returns every item and restores its stock. The
-                        refund defaults to the amount paid.
-                      </div>
-                    )}
                     <Field
-                      label={
-                        dialog.mode === "return"
-                          ? "Refund amount"
-                          : "Payment amount"
-                      }
+                      label="Payment amount"
                       name="amount"
                       type="number"
                       step="0.01"
-                      min={dialog.mode === "return" ? 0 : 0.01}
-                      max={
-                        dialog.mode === "return"
-                          ? dialog.row.paid
-                          : dialog.row.due
-                      }
-                      defaultValue={Math.max(
-                        0,
-                        dialog.mode === "return"
-                          ? dialog.row.paid
-                          : dialog.row.due,
-                      )}
+                      min={0.01}
+                      max={dialog.row.due}
+                      defaultValue={Math.max(0, dialog.row.due)}
                       required
                     />
                     <Field label="Payment method">
@@ -470,9 +680,7 @@ export default function SalesList() {
                         ))}
                       </select>
                     </Field>
-                    {dialog.mode === "payment" && (
-                      <Field label="Notes" name="notes" />
-                    )}
+                    <Field label="Notes" name="notes" />
                   </>
                 )}
               </div>
@@ -487,7 +695,12 @@ export default function SalesList() {
                 </button>
                 <button
                   className={`btn ${dialog.mode === "return" ? "danger-btn" : "primary"}`}
-                  disabled={busy}
+                  disabled={
+                    busy ||
+                    (dialog.mode === "return" &&
+                      estimateReturn(dialog.row, returnSelection)
+                        .selectedGross <= 0)
+                  }
                 >
                   {busy
                     ? "Saving…"

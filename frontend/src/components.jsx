@@ -245,9 +245,10 @@ export function Pager({ data, onChange }) {
 }
 export function Badge({ children }) {
   const value = String(children ?? "");
+  const normalized = value.toLowerCase().replace(/[\s-]+/g, "_");
   return (
     <span
-      className={`badge ${["active", "paid", "delivered", "success"].includes(value) ? "green" : ["due", "pending", "in_review"].includes(value) ? "amber" : ["returned", "inactive", "cancelled"].includes(value) ? "red" : ""}`}
+      className={`badge ${["active", "paid", "delivered", "success"].includes(normalized) ? "green" : ["due", "pending", "in_review", "partial_return"].includes(normalized) ? "amber" : ["returned", "inactive", "cancelled"].includes(normalized) ? "red" : ""}`}
     >
       {value.replaceAll("_", " ") || "—"}
     </span>

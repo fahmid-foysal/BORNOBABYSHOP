@@ -36,13 +36,13 @@ Dates cover the current month, including today. See [docs/demo-data.md](docs/dem
 
 ## Database
 
-`migrations/001.sql` is preserved. `002_erp_integrity.sql` adds combo quantities, a shared barcode registry, unique customer phones and settlement IDs, courier dispatch state, inventory snapshots, accounting views, and settlement allocation records.
+`migrations/001.sql` is preserved. `002_erp_integrity.sql` adds combo quantities, a shared barcode registry, unique customer phones and settlement IDs, courier dispatch state, inventory snapshots, accounting views, and settlement allocation records. `003_reporting_indexes.sql` adds reporting and courier indexes. `004_partial_returns.sql` adds line-level return quantities, immutable line-component snapshots, return/refund audit records, and return-aware stock views.
 
 The migration runner recognizes an existing database containing all original tables and records its baseline. It then applies numbered migrations once and verifies their hashes. Do not edit applied migrations. MySQL DDL implicitly commits: back up production before migrating. Existing data must have unique customer phones and settlement IDs, and valid unique five-character barcodes across products and combos before 002. Historical stock is backfilled using the combo contents and product costs available at migration time; earlier composition/cost history cannot be reconstructed.
 
-Stock = purchases + adjustments − active sale component quantities. Sales expand combo quantities into immutable component rows. Returning a whole sale reverses its component deductions; later combo edits do not rewrite past stock or cost. Inventory-changing transactions serialize through a database row lock, preventing concurrent overselling. Barcodes use 0–9/A–Z, are reserved across both tables, and try at most 50 combinations. Negative stock adjustments support loss/damage.
+Stock = purchases + adjustments − unreturned active sale component quantities. Sales expand combo quantities into immutable component rows. Partial returns restore only the selected product/combo quantities using their sale-time component snapshots; later combo edits do not rewrite past stock, returns, or cost. Inventory-changing transactions serialize through a database row lock, preventing concurrent overselling. Barcodes use 0–9/A–Z, are reserved across both tables, and try at most 50 combinations. Negative stock adjustments support loss/damage.
 
-Referenced records cannot be deleted. Purchases with payouts cannot be deleted, and reducing purchased stock below sold quantities is rejected. Sales are preserved for accounting and support full-order returns with an editable refund amount. Partial item returns are outside this workflow.
+Referenced records cannot be deleted. Purchases with payouts cannot be deleted, and reducing purchased stock below sold quantities is rejected. Sales are preserved for accounting. Returns select sale lines and quantities, allocate the remaining order discount proportionally, refund only collected money above the recalculated payable amount, and refund customer delivery only when the final remaining items are returned.
 
 ## Steadfast configuration
 
@@ -138,7 +138,7 @@ Relative `/api` keeps production under one origin. `VITE_*` values are public, c
 | `/api/catalog`            | `GET /search`, `GET /categories`; products/combos list/detail/create/update/delete                                                             |
 | `/api/purchases`          | list/detail/create/update/delete; `POST /:id/payments`                                                                                         |
 | `/api/sales`              | `GET /customer?phone=...`, channel list/detail/create; `POST /online/bulk`; payments and return via `POST /:channel/:id/payments` or `/return` |
-| `/api/sales/online`       | `POST /:id/send-steadfast`, `POST /:id/reconcile-steadfast`                                                                                    |
+| `/api/sales/online`       | `POST /:id/send-steadfast`, `POST /:id/reconcile-steadfast`, `GET /:id/refresh-steadfast`                                                      |
 | `/api/steadfast/payments` | list; `POST /import` with `payment_id`                                                                                                         |
 | `/api/webhooks/steadfast` | Bearer-authenticated delivery status notifications                                                                                             |
 | `/api/analytics`          | `GET /dashboard`, `GET /reports/:type`, with `from`/`to`                                                                                       |
@@ -161,4 +161,4 @@ npm run build
 
 Integration creates a separate database named `bornobabyshop_test_<timestamp>`, leaves its fixtures for inspection, and never drops or truncates the shop database. Tests cover combo quantities, historical snapshots, concurrent overselling, rollback, refunds, authorization, courier dispatch/webhooks, duplicate-safe settlements, bulk requests, and all report SQL. Remove old test databases through your MySQL client after inspecting them.
 
-On Windows with Microsoft Edge installed, run `npm run test:browser` from `frontend` after a build and integration test. It uses the newest isolated test database and checks login, themes, image upload, barcode picking, basket preservation, checkout/receipt, CSV preview, reports, and mobile navigation. Screenshots are saved under `frontend/test-results`. No fixture sales are added to the shop database. Migration 003 adds unique courier consignment IDs and reporting indexes.
+On Windows with Microsoft Edge installed, run `npm run test:browser` from `frontend` after a build and integration test. It uses the newest isolated test database and checks login, themes, image upload, barcode picking, basket preservation, checkout/receipt, CSV preview, reports, and mobile navigation. Screenshots are saved under `frontend/test-results`. No fixture sales are added to the shop database.

@@ -2149,6 +2149,40 @@ td small {
   margin: 0;
   font-size: 8px;
 }
+.courier-refresh {
+  justify-self: start;
+  margin-top: 2px;
+}
+.return-items {
+  margin: 18px 0;
+}
+.return-items input {
+  width: 105px;
+}
+.return-summary {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.return-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  font-size: 10px;
+}
+.return-summary span {
+  color: var(--muted);
+}
+.return-summary .refund-total {
+  padding-top: 8px;
+  margin-top: 3px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
 .receipt {
   max-width: 360px;
   width: 100%;

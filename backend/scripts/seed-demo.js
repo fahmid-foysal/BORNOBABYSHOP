@@ -333,14 +333,15 @@ async function run() {
       const key = await insert(db, "offline_sales", {
         customer_id: customers[i % customers.length],
         status: returned ? "returned" : paid < payable ? "due" : "paid",
+        return_status: returned ? "full" : "none",
         notes: `${marker}: sale ${String(i + 1).padStart(2, "0")}`,
         sales_employee_id: i === 26 ? null : employees[i % 3],
         final_discount: discount,
         created_at: createdAt,
         created_by: userId,
       });
-      for (const item of items)
-        await insert(
+      for (const item of items) {
+        const lineId = await insert(
           db,
           item.item_type === "product"
             ? "offline_sale_products"
@@ -350,10 +351,25 @@ async function run() {
             [item.item_type === "product" ? "product_id" : "product_combo_id"]:
               item.item_id,
             quantity: item.quantity,
+            returned_quantity: returned ? item.quantity : 0,
             rate: item.rate,
             status: "active",
           },
         );
+        const components =
+          item.item_type === "combo"
+            ? comboMap.get(String(item.item_id))
+            : [{ product_id: item.item_id, quantity: 1 }];
+        for (const component of components)
+          await insert(db, "sale_line_components", {
+            channel: "offline",
+            sale_id: key,
+            item_type: item.item_type,
+            sale_line_id: lineId,
+            product_id: component.product_id,
+            component_quantity: component.quantity,
+          });
+      }
       for (const [productId, quantity] of expandComponents(items, comboMap)) {
         const p = byProductId.get(productId);
         await insert(db, "sale_components", {
@@ -361,6 +377,7 @@ async function run() {
           sale_id: key,
           product_id: p.id,
           quantity,
+          returned_quantity: returned ? quantity : 0,
           cost_rate: p.purchase_price,
           category_id: p.category_id,
           active: returned ? 0 : 1,

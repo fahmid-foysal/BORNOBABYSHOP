@@ -37,7 +37,7 @@ exports.dashboard = async (q) => {
     recent,
   ] = await Promise.all([
     query(
-      `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON v.channel=s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(quantity*cost_rate) cost FROM sale_components GROUP BY channel,sale_id) sc ON sc.channel=s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
+      `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON v.channel=s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) cost FROM sale_components WHERE active=1 GROUP BY channel,sale_id) sc ON sc.channel=s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
       dates,
     ),
     query(
@@ -65,7 +65,7 @@ exports.dashboard = async (q) => {
       dates,
     ),
     query(
-      `SELECT COALESCE(c.category_name,'Uncategorized') name,SUM(sc.quantity) quantity FROM sale_components sc JOIN all_sales s ON s.channel=sc.channel AND s.id=sc.sale_id LEFT JOIN categories c ON c.id=sc.category_id WHERE sc.active=1 AND s.${dateFilter} GROUP BY sc.category_id,c.category_name ORDER BY quantity DESC`,
+      `SELECT COALESCE(c.category_name,'Uncategorized') name,SUM(GREATEST(sc.quantity-sc.returned_quantity,0)) quantity FROM sale_components sc JOIN all_sales s ON s.channel=sc.channel AND s.id=sc.sale_id LEFT JOIN categories c ON c.id=sc.category_id WHERE sc.active=1 AND s.${dateFilter} GROUP BY sc.category_id,c.category_name ORDER BY quantity DESC`,
       dates,
     ),
     query(

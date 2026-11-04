@@ -33,6 +33,12 @@ router.post(
   action(c.reconcile),
 );
 router.get(
+  "/sales/online/:id/refresh-steadfast",
+  checkToken,
+  authorize("SALES"),
+  action(c.refreshStatus),
+);
+router.get(
   "/steadfast/payments",
   checkToken,
   authorize("STEADFAST_PAYMENTS"),

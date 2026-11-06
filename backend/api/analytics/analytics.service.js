@@ -130,7 +130,180 @@ const reports = {
     item: true,
   },
 };
+
+const optionalReportId = (value) =>
+  value == null || value === ""
+    ? null
+    : z.coerce.number().int().positive().parse(value);
+
+async function salesExplorer(q) {
+  const { from, to } = range(q);
+  const employeeId = optionalReportId(q.sales_employee_id);
+  const categoryId = optionalReportId(q.category_id);
+  const paymentMethodId = optionalReportId(q.payment_method_id);
+  const channelFilter = q.channel
+    ? z.enum(["offline", "online"]).parse(q.channel)
+    : null;
+  const statusFilter = q.status
+    ? z.enum(["paid", "due"]).parse(q.status)
+    : null;
+  const customerSearch = String(q.customer || "").trim().slice(0, 100);
+  let itemType = null;
+  let itemId = null;
+  if (q.item) {
+    const match = /^(product|combo):(\d+)$/.exec(String(q.item));
+    if (!match) throw new HttpError(400, "Invalid product filter");
+    itemType = match[1];
+    itemId = z.coerce.number().int().positive().parse(match[2]);
+  }
+
+  const conditions = [
+    "s.status<>'returned'",
+    `s.${dateFilter}`,
+  ];
+  const params = [from, to];
+  if (employeeId) {
+    conditions.push("s.sales_employee_id=?");
+    params.push(employeeId);
+  }
+  if (channelFilter) {
+    conditions.push("s.channel=?");
+    params.push(channelFilter);
+  }
+  if (statusFilter) {
+    conditions.push("s.status=?");
+    params.push(statusFilter);
+  }
+  if (itemType) {
+    conditions.push("l.item_type=?", "l.item_id=?");
+    params.push(itemType, itemId);
+  }
+  if (categoryId) {
+    conditions.push(
+      "EXISTS(SELECT 1 FROM sale_line_components fsc JOIN products fp ON fp.id=fsc.product_id WHERE BINARY fsc.channel=BINARY l.channel AND fsc.sale_id=l.sale_id AND BINARY fsc.item_type=BINARY l.item_type AND fsc.sale_line_id=l.line_id AND fp.category_id=?)",
+    );
+    params.push(categoryId);
+  }
+  if (paymentMethodId) {
+    conditions.push(
+      "EXISTS(SELECT 1 FROM offline_sale_payments ofp WHERE s.channel='offline' AND ofp.offline_sale_id=s.id AND ofp.payment_method_id=? AND ofp.status='active' UNION ALL SELECT 1 FROM online_sale_payments onp WHERE s.channel='online' AND onp.online_sale_id=s.id AND onp.payment_method_id=? AND onp.status='active')",
+    );
+    params.push(paymentMethodId, paymentMethodId);
+  }
+  if (customerSearch) {
+    conditions.push("(cu.cus_name LIKE ? OR cu.cus_phone LIKE ?)");
+    params.push(`%${customerSearch}%`, `%${customerSearch}%`);
+  }
+
+  const where = conditions.join(" AND ");
+  const lineCost = `LEFT JOIN (
+    SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,
+      SUM(slc.component_quantity*sc.cost_rate) unit_cost
+    FROM sale_line_components slc
+    JOIN sale_components sc ON BINARY sc.channel=BINARY slc.channel AND sc.sale_id=slc.sale_id AND sc.product_id=slc.product_id
+    GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id
+  ) lc ON BINARY lc.channel=BINARY l.channel AND lc.sale_id=l.sale_id AND BINARY lc.item_type=BINARY l.item_type AND lc.sale_line_id=l.line_id`;
+  const base = `SELECT s.channel,s.id sale_id,s.created_at,s.status,s.delivery_charge,
+    s.sales_employee_id,COALESCE(e.name,'Unassigned') sales_person,
+    cu.id customer_id,cu.cus_name customer_name,cu.cus_phone customer_phone,
+    l.item_type,l.item_id,l.item_name,l.quantity,l.rate,
+    l.quantity*l.rate gross_sales,
+    COALESCE(s.final_discount/NULLIF(st.subtotal,0),0)*l.quantity*l.rate allocated_discount,
+    l.quantity*l.rate-COALESCE(s.final_discount/NULLIF(st.subtotal,0),0)*l.quantity*l.rate net_sales,
+    l.quantity*COALESCE(lc.unit_cost,0) sold_cost
+    FROM all_sales s
+    JOIN customers cu ON cu.id=s.customer_id
+    LEFT JOIN employees e ON e.id=s.sales_employee_id
+    JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
+    JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) st ON BINARY st.channel=BINARY s.channel AND st.sale_id=s.id
+    ${lineCost}
+    WHERE ${where}`;
+
+  const baseParams = () => [...params];
+  const [lineSummary, orderSummary, daily, people, products, channels, customers, orders, categories, optionRows] =
+    await Promise.all([
+      query(
+        `SELECT COALESCE(SUM(quantity),0) quantity,COALESCE(SUM(gross_sales),0) gross_sales,COALESCE(SUM(allocated_discount),0) allocated_discount,COALESCE(SUM(net_sales),0) net_product_sales,COALESCE(SUM(sold_cost),0) sold_cost FROM (${base}) filtered_lines`,
+        baseParams(),
+      ),
+      query(
+        `SELECT COUNT(*) sale_count,COALESCE(SUM(delivery_charge),0) delivery_charge FROM (SELECT channel,sale_id,MAX(delivery_charge) delivery_charge FROM (${base}) filtered_lines GROUP BY channel,sale_id) filtered_orders`,
+        baseParams(),
+      ),
+      query(
+        `SELECT DATE(created_at) period,COUNT(DISTINCT CONCAT(channel,':',sale_id)) sale_count,SUM(quantity) quantity,SUM(net_sales) net_sales,SUM(sold_cost) sold_cost FROM (${base}) filtered_lines GROUP BY DATE(created_at) ORDER BY period`,
+        baseParams(),
+      ),
+      query(
+        `SELECT sales_person,COUNT(DISTINCT CONCAT(channel,':',sale_id)) sale_count,SUM(quantity) quantity,SUM(net_sales) net_sales,SUM(sold_cost) sold_cost FROM (${base}) filtered_lines GROUP BY sales_employee_id,sales_person ORDER BY net_sales DESC`,
+        baseParams(),
+      ),
+      query(
+        `SELECT item_type,item_id,item_name,COUNT(DISTINCT CONCAT(channel,':',sale_id)) sale_count,SUM(quantity) quantity,SUM(gross_sales) gross_sales,SUM(allocated_discount) allocated_discount,SUM(net_sales) net_sales,SUM(sold_cost) sold_cost FROM (${base}) filtered_lines GROUP BY item_type,item_id,item_name ORDER BY net_sales DESC`,
+        baseParams(),
+      ),
+      query(
+        `SELECT channel,COUNT(DISTINCT CONCAT(channel,':',sale_id)) sale_count,SUM(quantity) quantity,SUM(net_sales) net_sales,SUM(sold_cost) sold_cost FROM (${base}) filtered_lines GROUP BY channel ORDER BY net_sales DESC`,
+        baseParams(),
+      ),
+      query(
+        `SELECT customer_id,customer_name,customer_phone,COUNT(DISTINCT CONCAT(channel,':',sale_id)) sale_count,SUM(quantity) quantity,SUM(net_sales) net_sales FROM (${base}) filtered_lines GROUP BY customer_id,customer_name,customer_phone ORDER BY net_sales DESC LIMIT 100`,
+        baseParams(),
+      ),
+      query(
+        `SELECT channel,sale_id,MAX(created_at) created_at,MAX(status) status,MAX(customer_name) customer_name,MAX(customer_phone) customer_phone,MAX(sales_person) sales_person,SUM(quantity) quantity,SUM(net_sales) net_product_sales,MAX(delivery_charge) delivery_charge,SUM(net_sales)+MAX(delivery_charge) payable,SUM(sold_cost) sold_cost FROM (${base}) filtered_lines GROUP BY channel,sale_id ORDER BY created_at DESC,sale_id DESC LIMIT 500`,
+        baseParams(),
+      ),
+      query(
+        `SELECT COALESCE(c.category_name,'Uncategorized') category,COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,SUM(l.quantity*slc.component_quantity) component_quantity,SUM(l.quantity*slc.component_quantity*COALESCE(sc.cost_rate,0)) sold_cost
+         FROM all_sales s JOIN customers cu ON cu.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id
+         JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
+         JOIN sale_line_components slc ON BINARY slc.channel=BINARY l.channel AND slc.sale_id=l.sale_id AND BINARY slc.item_type=BINARY l.item_type AND slc.sale_line_id=l.line_id
+         JOIN products p ON p.id=slc.product_id LEFT JOIN categories c ON c.id=p.category_id
+         LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY s.channel AND sc.sale_id=s.id AND sc.product_id=slc.product_id
+         WHERE ${where}${categoryId ? " AND p.category_id=?" : ""}
+         GROUP BY p.category_id,c.category_name ORDER BY component_quantity DESC`,
+        categoryId ? [...params, categoryId] : baseParams(),
+      ),
+      Promise.all([
+        query("SELECT id,name FROM employees ORDER BY name"),
+        query("SELECT id,category_name name FROM categories ORDER BY category_name"),
+        query("SELECT id,method name FROM payment_methods ORDER BY method"),
+        query("SELECT CONCAT('product:',id) value,product_name name,barcode,'product' item_type FROM products WHERE status='active' UNION ALL SELECT CONCAT('combo:',id),combo_name,barcode,'combo' FROM product_combos ORDER BY name"),
+      ]),
+    ]);
+
+  const summary = {
+    ...lineSummary[0],
+    ...orderSummary[0],
+  };
+  summary.gross_profit = round(
+    Number(summary.net_product_sales) +
+      Number(summary.delivery_charge) -
+      Number(summary.sold_cost),
+  );
+  return {
+    from,
+    to,
+    summary,
+    daily,
+    salespeople: people,
+    categories,
+    products,
+    channels,
+    customers,
+    orders,
+    options: {
+      employees: optionRows[0],
+      categories: optionRows[1],
+      payment_methods: optionRows[2],
+      items: optionRows[3],
+    },
+  };
+}
+
 exports.report = async (type, q) => {
+  if (type === "sales-explorer") return salesExplorer(q);
   const config = reports[type];
   if (!config) throw new HttpError(404, "Unknown report");
   const { from, to } = range(q);

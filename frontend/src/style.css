@@ -889,6 +889,101 @@ code {
   padding: 8px 15px;
   font-size: 11px;
 }
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(145px, 1fr));
+  gap: 10px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+.report-filter-grid label {
+  display: grid;
+  gap: 5px;
+}
+.report-filter-grid label > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.report-filter-grid select,
+.report-filter-grid input {
+  width: 100%;
+}
+.report-filter-grid .btn {
+  align-self: end;
+  justify-content: center;
+}
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+  padding: 18px;
+}
+.report-summary-card {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.report-summary-card span {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.report-summary-card strong {
+  font-size: 16px;
+}
+.report-sections-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.report-section {
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.report-sections-grid .report-section:nth-child(odd) {
+  border-right: 1px solid var(--border);
+}
+.report-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 18px;
+}
+.report-section-heading h4 {
+  margin: 0;
+  font-size: 12px;
+}
+.report-section-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+@media (max-width: 1000px) {
+  .report-filter-grid,
+  .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+  .report-sections-grid {
+    grid-template-columns: 1fr;
+  }
+  .report-sections-grid .report-section:nth-child(odd) {
+    border-right: 0;
+  }
+}
+@media (max-width: 600px) {
+  .report-filter-grid,
+  .report-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .legend {
   display: inline-block;
   width: 7px;

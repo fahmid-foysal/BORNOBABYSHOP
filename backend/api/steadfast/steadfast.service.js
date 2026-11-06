@@ -348,11 +348,11 @@ exports.importPayment = async (paymentId, user) => {
         steadfast_settled_orders_details: JSON.stringify(response),
       });
     let [methods] = await db.query(
-      "SELECT id FROM payment_methods WHERE method='Steadfast' ORDER BY id LIMIT 1",
+      "SELECT id FROM payment_methods WHERE method='STEADFAST' ORDER BY id LIMIT 1",
     );
     const methodId =
       methods[0]?.id ||
-      (await insert(db, "payment_methods", { method: "Steadfast" }));
+      (await insert(db, "payment_methods", { method: "STEADFAST" }));
     let matched = 0;
     let already_applied = 0;
     const unmatched = [];

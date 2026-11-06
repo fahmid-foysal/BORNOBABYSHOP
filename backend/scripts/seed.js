@@ -20,7 +20,7 @@ async function run() {
           await bcrypt.hash(password, 12),
         ],
       );
-    for (const method of ["Cash", "bKash", "Nagad", "Bank", "Steadfast"])
+    for (const method of ["CASH", "BKASH", "NAGAD", "BANK", "STEADFAST"])
       await db.query(
         "INSERT INTO payment_methods(method) SELECT ? WHERE NOT EXISTS(SELECT 1 FROM payment_methods WHERE method=?)",
         [method, method],

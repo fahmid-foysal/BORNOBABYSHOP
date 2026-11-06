@@ -84,7 +84,7 @@ async function run() {
       throw new Error("Run npm run seed first to create an administrator");
     const userId = admins[0].id;
     const methods = {};
-    for (const method of ["Cash", "bKash", "Nagad", "Bank"]) {
+    for (const method of ["CASH", "BKASH", "NAGAD", "BANK"]) {
       const [found] = await db.query(
         "SELECT id FROM payment_methods WHERE method=? ORDER BY id LIMIT 1",
         [method],
@@ -128,10 +128,10 @@ async function run() {
         }),
       );
     const employees = [];
-    for (const [index, name] of ["Ayesha", "Rafi", "Nabila"].entries())
+    for (const [index, name] of ["AYESHA", "RAFI", "NABILA"].entries())
       employees.push(
         await insert(db, "employees", {
-          name: `[Demo] ${name}`,
+          name: `[DEMO] ${name}`,
           phone: `0100000300${index + 1}`,
           rank: index === 0 ? "Shop manager" : "Sales associate",
           salary: index === 0 ? 22000 : 16000,
@@ -384,7 +384,7 @@ async function run() {
         });
         if (!returned) p.sold += quantity;
       }
-      const method = [methods.Cash, methods.bKash, methods.Nagad][i % 3];
+      const method = [methods.CASH, methods.BKASH, methods.NAGAD][i % 3];
       if (paid)
         await insert(db, "offline_sale_payments", {
           offline_sale_id: key,

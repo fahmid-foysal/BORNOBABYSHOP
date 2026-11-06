@@ -117,6 +117,29 @@ exports.save = async (resource, raw, key, user) => {
   const config = exports.config(resource);
   const b = config.schema.parse(raw);
   return transaction(async (db) => {
+    const canonicalField =
+      resource === "payment_methods"
+        ? "method"
+        : resource === "employees"
+          ? "name"
+          : null;
+    if (canonicalField) {
+      b[canonicalField] = b[canonicalField].trim().toUpperCase();
+      const duplicateParams = [resource, canonicalField, b[canonicalField]];
+      const duplicateWhere = key ? " AND id<>?" : "";
+      if (key) duplicateParams.push(id.parse(key));
+      const [duplicates] = await db.query(
+        `SELECT id FROM ?? WHERE UPPER(TRIM(??))=UPPER(TRIM(?))${duplicateWhere} LIMIT 1 FOR UPDATE`,
+        duplicateParams,
+      );
+      if (duplicates.length)
+        throw new HttpError(
+          409,
+          resource === "payment_methods"
+            ? "A payment method with this name already exists"
+            : "A sales employee with this name already exists",
+        );
+    }
     if (key) {
       await one(db, "SELECT id FROM ?? WHERE id=? FOR UPDATE", [
         resource,

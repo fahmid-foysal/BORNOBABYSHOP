@@ -37,7 +37,7 @@ exports.dashboard = async (q) => {
     recent,
   ] = await Promise.all([
     query(
-      `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON v.channel=s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) cost FROM sale_components WHERE active=1 GROUP BY channel,sale_id) sc ON sc.channel=s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
+      `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal+s.delivery_charge-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON v.channel=s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) cost FROM sale_components WHERE active=1 GROUP BY channel,sale_id) sc ON sc.channel=s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
       dates,
     ),
     query(

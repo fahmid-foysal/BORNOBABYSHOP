@@ -11,10 +11,11 @@ import {
 import { Link } from "react-router-dom";
 import { api, money, downloadCsv } from "../api";
 import { useApp, ErrorBox, Badge, Empty } from "../components";
-import { template, parseSalesCsv } from "../csv";
+import { bulkTemplates, parseSalesCsv } from "../csv";
 import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 export default function BulkSales() {
-  const { notify } = useApp();
+  const { notify, lookups } = useApp();
+  const [importMode, setImportMode] = useState("mode2");
   const [orders, setOrders] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -38,7 +39,7 @@ export default function BulkSales() {
     setStickerOrders([]);
     setFilename(f.name);
     try {
-      setOrders(await parseSalesCsv(f));
+      setOrders(await parseSalesCsv(f, importMode, lookups));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -98,7 +99,10 @@ export default function BulkSales() {
         <button
           className="btn"
           onClick={() =>
-            downloadCsv(template, "borno-online-sales-template.csv")
+            downloadCsv(
+              bulkTemplates[importMode],
+              `borno-online-sales-${importMode === "mode1" ? "payable" : "detailed"}-template.csv`,
+            )
           }
         >
           <Download size={16} />
@@ -106,6 +110,46 @@ export default function BulkSales() {
         </button>
       </div>
       <ErrorBox message={error} />
+      <section className="panel panel-content bulk-mode-panel">
+        <div>
+          <strong>Choose CSV mode</strong>
+          <p className="muted">
+            {importMode === "mode1"
+              ? "Mode 1 uses current sale prices, zero delivery charge, and calculates the discount from total payable."
+              : "Mode 2 lets the CSV provide rate, discount, delivery charge, paid amount, and notes."}
+          </p>
+        </div>
+        <div className="segmented">
+          <button
+            type="button"
+            className={importMode === "mode1" ? "selected" : ""}
+            onClick={() => {
+              setImportMode("mode1");
+              setOrders([]);
+              setResult(null);
+              setStickerOrders([]);
+              setFilename("");
+              setError("");
+            }}
+          >
+            Mode 1 · Total payable
+          </button>
+          <button
+            type="button"
+            className={importMode === "mode2" ? "selected" : ""}
+            onClick={() => {
+              setImportMode("mode2");
+              setOrders([]);
+              setResult(null);
+              setStickerOrders([]);
+              setFilename("");
+              setError("");
+            }}
+          >
+            Mode 2 · Detailed
+          </button>
+        </div>
+      </section>
       <div className="bulk-steps">
         <div className="selected">
           <b>1</b>Upload CSV
@@ -131,6 +175,7 @@ export default function BulkSales() {
             One item per row. Use the same order_ref to group multiple items.
           </span>
           <input
+            key={importMode}
             type="file"
             accept=".csv,text/csv"
             onChange={file}
@@ -142,10 +187,12 @@ export default function BulkSales() {
             <strong>A few details before you import</strong>
             <p>
               Keep phone numbers as text to preserve the leading zero.
-              Order-level fields must match across rows with the same order_ref.
-              A blank rate uses the current sale price. Discount is a fixed
-              amount per order. Replace the sample barcodes with your actual
-              catalog barcodes.
+              In Mode 1, customer details and totals may be entered on only one
+              row per order; item rows beneath may leave them blank. In Mode 2,
+              order-level fields must match across rows with the same order_ref.
+              Payment method and sales employee are matched by name without
+              case sensitivity. Replace sample barcodes with actual catalog
+              barcodes.
             </p>
           </div>
         </div>
@@ -199,7 +246,10 @@ export default function BulkSales() {
                       <td>{money(subtotal)}</td>
                       <td>{money(o.final_discount)}</td>
                       <td>
-                        <input
+                        {importMode === "mode1" ? (
+                          money(0)
+                        ) : (
+                          <input
                           className="csv-amount"
                           aria-label={`Delivery charge for ${o.order_ref}`}
                           type="number"
@@ -218,7 +268,8 @@ export default function BulkSales() {
                               ),
                             )
                           }
-                        />
+                          />
+                        )}
                       </td>
                       <td>{money(o.paid_amount)}</td>
                       <td>

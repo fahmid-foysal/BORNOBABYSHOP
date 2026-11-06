@@ -566,6 +566,7 @@ test(
           );
           assert.equal(online.sent_to_steadfast, 1);
           assert.equal(online.steadfast_cod_amount, 130);
+          assert.equal(online.steadfast_status, "In Review");
           global.fetch = async (url, opts) => {
             assert.match(url, /status_by_cid\/123456$/);
             assert.equal(opts.method, "GET");
@@ -727,16 +728,18 @@ test(
             user,
           );
           assert.equal(result.orders.length, 2);
-          assert.equal(
-            (await sales.detail("online", result.orders[0].id))
-              .sent_to_steadfast,
-            1,
+          const acceptedOrder = await sales.detail(
+            "online",
+            result.orders[0].id,
           );
-          assert.equal(
-            (await sales.detail("online", result.orders[1].id))
-              .sent_to_steadfast,
-            0,
+          assert.equal(acceptedOrder.sent_to_steadfast, 1);
+          assert.equal(acceptedOrder.steadfast_status, "In Review");
+          const rejectedOrder = await sales.detail(
+            "online",
+            result.orders[1].id,
           );
+          assert.equal(rejectedOrder.sent_to_steadfast, 0);
+          assert.equal(rejectedOrder.steadfast_status, null);
         },
       );
       await t.test(

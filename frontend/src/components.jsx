@@ -210,7 +210,7 @@ export function SearchInput({
     </div>
   );
 }
-export function Pager({ data, onChange }) {
+export function Pager({ data, onChange, onLimitChange }) {
   if (!data) return null;
   return (
     <div className="pagination">
@@ -219,6 +219,22 @@ export function Pager({ data, onChange }) {
           ? `${(data.page - 1) * data.limit + 1}–${Math.min(data.page * data.limit, data.total)} of ${number(data.total)} records`
           : "0 records"}
       </span>
+      {onLimitChange && (
+        <label className="page-limit">
+          Show
+          <select
+            aria-label="Rows per page"
+            value={data.limit}
+            onChange={(event) => onLimitChange(Number(event.target.value))}
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div>
         <button
           className="icon-btn"

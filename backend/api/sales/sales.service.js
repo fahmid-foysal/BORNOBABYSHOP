@@ -265,6 +265,15 @@ exports.list = async (c, q) => {
     where += " AND s.status=?";
     params.push(q.status);
   }
+  if (c === "online" && q.steadfast_status) {
+    const steadfastStatus = z.string().trim().max(100).parse(q.steadfast_status);
+    if (steadfastStatus === "pending")
+      where += " AND (s.steadfast_status IS NULL OR s.steadfast_status='pending')";
+    else {
+      where += " AND s.steadfast_status=?";
+      params.push(steadfastStatus);
+    }
+  }
   if (q.from) {
     where += " AND s.created_at>=?";
     params.push(z.string().date().parse(q.from));
@@ -281,7 +290,16 @@ exports.list = async (c, q) => {
   );
   const rows = [];
   for (const k of keys) rows.push(await exports.detail(c, k.id));
-  return pageResult(rows, count.total, p);
+  const result = pageResult(rows, count.total, p);
+  if (c === "online") {
+    const [steadfastStatuses] = await pool.query(
+      "SELECT DISTINCT steadfast_status FROM online_sales WHERE steadfast_status IS NOT NULL AND steadfast_status<>'' ORDER BY steadfast_status",
+    );
+    result.steadfast_statuses = steadfastStatuses.map(
+      (row) => row.steadfast_status,
+    );
+  }
+  return result;
 };
 async function paymentState(db, c, key) {
   const sale = await one(db, `SELECT * FROM ${c}_sales WHERE id=? FOR UPDATE`, [

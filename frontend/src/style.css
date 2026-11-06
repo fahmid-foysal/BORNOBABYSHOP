@@ -11,7 +11,7 @@
   --sidebar: #fcfdfd;
   --surface-soft: #f7f9fa;
   --text: #22343b;
-  --muted: #819096;
+  --muted: #65767d;
   --border: #e7edef;
   --accent: #087f83;
   --accent-hover: #066c70;
@@ -32,7 +32,7 @@
   --sidebar: #152027;
   --surface-soft: #1e2e36;
   --text: #e2edf0;
-  --muted: #92a6af;
+  --muted: #a9bbc3;
   --border: #2b3c45;
   --accent: #45b4b3;
   --accent-hover: #67c5c2;
@@ -1247,6 +1247,17 @@ td small {
   width: 25px;
   height: 25px;
 }
+.page-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.page-limit select {
+  min-height: 27px;
+  padding: 3px 24px 3px 8px;
+  font-size: 9px;
+}
 .filter-row {
   padding: 13px 20px;
   border-bottom: 1px solid var(--border);
@@ -1621,6 +1632,13 @@ td small {
 .detail-grid strong {
   font-size: 12px;
   font-weight: 500;
+}
+.order-detail-grid {
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+}
+.detail-grid .detail-wide {
+  grid-column: span 3;
 }
 .barcode-input {
   display: flex;
@@ -2088,15 +2106,26 @@ td small {
 .sales-table td {
   vertical-align: top;
   padding: 18px 16px;
+  color: var(--text);
+}
+.sales-table .select-column {
+  width: 38px;
+  min-width: 38px;
+  padding-left: 12px;
+  padding-right: 6px;
+  text-align: center;
+}
+.sales-table .select-column input {
+  margin: 2px 0 0;
+}
+.sales-table td > small,
+.sales-table td > strong {
+  display: block;
 }
 .customer-name {
-  font-size: 11px;
-  margin-top: 10px;
-  font-weight: 500;
-}
-.address {
-  max-width: 200px;
-  min-width: 110px;
+  font-size: 12px;
+  font-weight: 650;
+  min-width: 120px;
 }
 .sale-item-list {
   display: grid;
@@ -2105,11 +2134,11 @@ td small {
 }
 .sale-item-list > div > strong {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
 }
 .sale-item-list > div > span {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
   margin-top: 3px;
 }
@@ -2122,7 +2151,7 @@ td small {
   display: flex;
   justify-content: space-between;
   gap: 15px;
-  font-size: 9px;
+  font-size: 10px;
 }
 .payment-cell > div > span {
   color: var(--muted);
@@ -2147,7 +2176,93 @@ td small {
 }
 .courier-cell > small {
   margin: 0;
-  font-size: 8px;
+  font-size: 9px;
+}
+.hover-info {
+  display: block;
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 8px;
+}
+.info-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 650;
+}
+.info-trigger:hover,
+.info-trigger:focus {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.info-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  display: block;
+  width: max-content;
+  min-width: 180px;
+  max-width: min(320px, 70vw);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 30px #20383f1f;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.15s,
+    transform 0.15s,
+    visibility 0.15s;
+}
+.hover-info:hover .info-popover,
+.hover-info:focus-within .info-popover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.consignment-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  font-size: 9px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--accent-text);
+}
+.copy-button:hover {
+  background: var(--accent-soft);
 }
 .courier-refresh {
   justify-self: start;
@@ -2305,6 +2420,9 @@ td small {
 .bulk-checkout .toggle-card {
   margin: 0;
   flex: 1;
+}
+.sticker-print-sheet {
+  display: none;
 }
 .reports-layout {
   display: grid;
@@ -3053,6 +3171,9 @@ td small {
     grid-template-columns: 1fr 1fr;
     gap: 15px;
   }
+  .detail-grid .detail-wide {
+    grid-column: span 2;
+  }
   .detail-gallery img {
     width: 130px;
     height: 130px;
@@ -3279,5 +3400,98 @@ td small {
   }
   .receipt-thanks {
     break-after: avoid;
+  }
+  body.printing-stickers,
+  body.printing-stickers #root,
+  body.printing-stickers .app-shell,
+  body.printing-stickers .main-shell,
+  body.printing-stickers .page {
+    width: 3in !important;
+    min-width: 3in !important;
+    max-width: 3in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.printing-stickers .sticker-print-sheet,
+  body.printing-stickers .sticker-print-sheet * {
+    visibility: visible !important;
+  }
+  body.printing-stickers .sticker-print-sheet {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 3in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  body.printing-stickers .delivery-sticker {
+    display: flex !important;
+    flex-direction: column;
+    width: 3in !important;
+    height: 2in !important;
+    margin: 0 !important;
+    padding: 0.12in !important;
+    overflow: hidden !important;
+    break-after: page;
+    page-break-after: always;
+    background: #fff !important;
+    color: #000 !important;
+    border: 0 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8pt;
+    line-height: 1.15;
+  }
+  body.printing-stickers .delivery-sticker:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  body.printing-stickers .delivery-sticker header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding-bottom: 0.06in;
+    margin-bottom: 0.05in;
+    border-bottom: 1.5px solid #000;
+    font-size: 8.5pt;
+  }
+  body.printing-stickers .delivery-sticker header b {
+    font-size: 7.5pt;
+    white-space: nowrap;
+  }
+  body.printing-stickers .sticker-row {
+    display: grid;
+    grid-template-columns: 0.48in minmax(0, 1fr);
+    gap: 0.04in;
+    margin-bottom: 0.04in;
+  }
+  body.printing-stickers .sticker-row > span,
+  body.printing-stickers .delivery-sticker footer > span {
+    font-weight: 700;
+  }
+  body.printing-stickers .sticker-row strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  body.printing-stickers .sticker-address strong,
+  body.printing-stickers .sticker-note strong {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  body.printing-stickers .sticker-note {
+    font-size: 7.5pt;
+  }
+  body.printing-stickers .delivery-sticker footer {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.08in;
+    margin-top: auto;
+    padding-top: 0.05in;
+    border-top: 1.5px solid #000;
+    font-size: 12pt;
   }
 }

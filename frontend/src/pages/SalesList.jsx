@@ -11,6 +11,9 @@ import {
   List,
   Link2,
   RefreshCw,
+  Copy,
+  StickyNote,
+  MapPin,
 } from "lucide-react";
 import { api, qs, money, defaultDates } from "../api";
 import {
@@ -27,9 +30,23 @@ import {
   DateRange,
 } from "../components";
 import { Receipt } from "../receipt";
+import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 const returnKey = (item) => `${item.item_type}:${item.line_id}`;
 const roundMoney = (value) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+function HoverInfo({ label, icon: Icon, children }) {
+  return (
+    <span className="hover-info">
+      <button type="button" className="info-trigger" aria-label={label}>
+        <Icon size={13} />
+        <span>{label}</span>
+      </button>
+      <span className="info-popover" role="tooltip">
+        {children}
+      </span>
+    </span>
+  );
+}
 function estimateReturn(row, selection) {
   const selectedGross = roundMoney(
     row.items.reduce(
@@ -76,8 +93,11 @@ export default function SalesList() {
   const [channel, setChannel] = useState("offline");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [steadfastStatus, setSteadfastStatus] = useState("");
   const [dates, setDates] = useState(defaultDates);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedRows, setSelectedRows] = useState({});
   const [version, setVersion] = useState(0);
   const [dialog, setDialog] = useState(null);
   const [error, setError] = useState("");
@@ -90,7 +110,7 @@ export default function SalesList() {
     loading,
     error: loadError,
   } = useData(
-    `/sales/${channel}?${qs({ search, status, ...dates, page })}`,
+    `/sales/${channel}?${qs({ search, status, steadfast_status: channel === "online" ? steadfastStatus : "", ...dates, page, limit })}`,
     version,
   );
   async function send(row) {
@@ -122,6 +142,49 @@ export default function SalesList() {
     } finally {
       setRefreshingId(null);
     }
+  }
+  async function copyConsignment(consignmentId) {
+    const value = String(consignmentId);
+    try {
+      if (navigator.clipboard && window.isSecureContext)
+        await navigator.clipboard.writeText(value);
+      else {
+        const input = document.createElement("textarea");
+        input.value = value;
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+      notify(`Consignment ${value} copied`);
+    } catch {
+      notify("Could not copy the consignment ID", "error");
+    }
+  }
+  function toggleSelected(row, checked) {
+    setSelectedRows((current) => {
+      const next = { ...current };
+      if (checked) next[row.id] = row;
+      else delete next[row.id];
+      return next;
+    });
+  }
+  function togglePageSelection(checked) {
+    setSelectedRows((current) => {
+      const next = { ...current };
+      for (const row of data?.rows || []) {
+        if (checked) next[row.id] = row;
+        else delete next[row.id];
+      }
+      return next;
+    });
+  }
+  function printSelectedStickers() {
+    const count = Object.keys(selectedRows).length;
+    if (!count) return notify("Select at least one online order", "error");
+    printStickerSheet();
   }
   function open(mode, row) {
     setDialog({ mode, row });
@@ -174,6 +237,13 @@ export default function SalesList() {
       setBusy(false);
     }
   }
+  const pageRows = data?.rows || [];
+  const selectedOrders = Object.values(selectedRows);
+  const selectedOnPage = pageRows.filter((row) => selectedRows[row.id]).length;
+  const allOnPageSelected =
+    channel === "online" &&
+    pageRows.length > 0 &&
+    selectedOnPage === pageRows.length;
   return (
     <>
       <div className="page-heading">
@@ -196,6 +266,8 @@ export default function SalesList() {
               onClick={() => {
                 setChannel(c);
                 setPage(1);
+                setSteadfastStatus("");
+                setSelectedRows({});
               }}
             >
               {c === "offline" ? "In-store sales" : "Online sales"}
@@ -233,6 +305,41 @@ export default function SalesList() {
             <option value="due">Due</option>
             <option value="returned">Returned</option>
           </select>
+          {channel === "online" && (
+            <>
+              <select
+                aria-label="Filter Steadfast status"
+                value={steadfastStatus}
+                onChange={(event) => {
+                  setSteadfastStatus(event.target.value);
+                  setPage(1);
+                  setSelectedRows({});
+                }}
+              >
+                <option value="">All Steadfast statuses</option>
+                <option value="pending">Pending / not received</option>
+                {(data?.steadfast_statuses || [])
+                  .filter(
+                    (courierStatus) =>
+                      courierStatus.toLowerCase() !== "pending",
+                  )
+                  .map((courierStatus) => (
+                    <option key={courierStatus} value={courierStatus}>
+                      {courierStatus.replaceAll("_", " ")}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                className="btn"
+                disabled={!selectedOrders.length}
+                onClick={printSelectedStickers}
+              >
+                <Printer size={15} />
+                Print stickers ({selectedOrders.length})
+              </button>
+            </>
+          )}
         </div>
         <ErrorBox message={loadError} />
         {loading ? (
@@ -242,7 +349,25 @@ export default function SalesList() {
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th>Order / customer</th>
+                  {channel === "online" && (
+                    <th className="select-column">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all orders on this page"
+                        checked={allOnPageSelected}
+                        ref={(input) => {
+                          if (input)
+                            input.indeterminate =
+                              selectedOnPage > 0 && !allOnPageSelected;
+                        }}
+                        onChange={(event) =>
+                          togglePageSelection(event.target.checked)
+                        }
+                      />
+                    </th>
+                  )}
+                  <th>Order</th>
+                  <th>Customer</th>
                   <th>Items</th>
                   <th>Payments</th>
                   <th>Sales person</th>
@@ -254,14 +379,33 @@ export default function SalesList() {
               <tbody>
                 {data.rows.map((row) => (
                   <tr key={row.id}>
+                    {channel === "online" && (
+                      <td className="select-column">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ORD-${row.id}`}
+                          checked={Boolean(selectedRows[row.id])}
+                          onChange={(event) =>
+                            toggleSelected(row, event.target.checked)
+                          }
+                        />
+                      </td>
+                    )}
                     <td>
                       <strong>
                         {channel === "online" ? "ORD" : "POS"}-{row.id}
                       </strong>
                       <small>{row.created_at}</small>
+                      <HoverInfo label="Notes" icon={StickyNote}>
+                        {row.notes || "No notes for this order"}
+                      </HoverInfo>
+                    </td>
+                    <td>
                       <div className="customer-name">{row.cus_name}</div>
                       <small>{row.cus_phone}</small>
-                      <small className="address">{row.cus_address}</small>
+                      <HoverInfo label="Address" icon={MapPin}>
+                        {row.cus_address || "No address provided"}
+                      </HoverInfo>
                     </td>
                     <td>
                       <div className="sale-item-list">
@@ -330,21 +474,41 @@ export default function SalesList() {
                           </small>
                           <small>COD: {money(row.steadfast_cod_amount)}</small>
                           {row.steadfast_consignment_id && (
-                            <button
-                              className="btn small-btn courier-refresh"
-                              disabled={refreshingId === row.id}
-                              onClick={() => refreshSteadfast(row)}
-                            >
-                              <RefreshCw
-                                size={12}
-                                className={
-                                  refreshingId === row.id ? "spin" : ""
-                                }
-                              />
-                              {refreshingId === row.id
-                                ? "Refreshing"
-                                : "Refresh status"}
-                            </button>
+                            <>
+                              <div className="consignment-line">
+                                <span>
+                                  CID: {row.steadfast_consignment_id}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="copy-button"
+                                  aria-label={`Copy consignment ${row.steadfast_consignment_id}`}
+                                  title="Copy consignment ID"
+                                  onClick={() =>
+                                    copyConsignment(
+                                      row.steadfast_consignment_id,
+                                    )
+                                  }
+                                >
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+                              <button
+                                className="btn small-btn courier-refresh"
+                                disabled={refreshingId === row.id}
+                                onClick={() => refreshSteadfast(row)}
+                              >
+                                <RefreshCw
+                                  size={12}
+                                  className={
+                                    refreshingId === row.id ? "spin" : ""
+                                  }
+                                />
+                                {refreshingId === row.id
+                                  ? "Refreshing"
+                                  : "Refresh status"}
+                              </button>
+                            </>
                           )}
                           {row.steadfast_tracking_link &&
                             /^https:\/\//.test(row.steadfast_tracking_link) && (
@@ -437,8 +601,16 @@ export default function SalesList() {
             text="Adjust the dates and filters, or create a new sale."
           />
         )}
-        <Pager data={data} onChange={setPage} />
+        <Pager
+          data={data}
+          onChange={setPage}
+          onLimitChange={(value) => {
+            setLimit(value);
+            setPage(1);
+          }}
+        />
       </section>
+      <StickerSheet orders={selectedOrders} />
       {dialog && (
         <Modal
           title={`${dialog.mode === "detail" ? "Order" : dialog.mode === "payments" ? "Payment history" : dialog.mode === "return" ? "Return order" : dialog.mode === "reconcile" ? "Reconcile Steadfast dispatch" : "Add payment"} · ${channel === "online" ? "ORD" : "POS"}-${dialog.row.id}`}
@@ -453,6 +625,20 @@ export default function SalesList() {
             <>
               <div className="modal-body">
                 <Receipt sale={dialog.row} />
+                <div className="detail-grid order-detail-grid">
+                  <div className="detail-wide">
+                    <span>Order notes</span>
+                    <strong>
+                      {dialog.row.notes || "No notes for this order"}
+                    </strong>
+                  </div>
+                  <div className="detail-wide">
+                    <span>Customer address</span>
+                    <strong>
+                      {dialog.row.cus_address || "No address provided"}
+                    </strong>
+                  </div>
+                </div>
                 {channel === "online" && (
                   <div className="detail-grid">
                     {[

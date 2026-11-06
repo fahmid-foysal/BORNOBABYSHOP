@@ -118,7 +118,7 @@ exports.send = async (keys, bulk = false) => {
         result && result.status === "success" && result.consignment_id;
       if (success)
         await db.query(
-          "UPDATE online_sales SET sent_to_steadfast=1,steadfast_consignment_id=?,steadfast_tracking_code=?,steadfast_tracking_link=?,steadfast_last_error=NULL WHERE id=?",
+          "UPDATE online_sales SET sent_to_steadfast=1,steadfast_consignment_id=?,steadfast_tracking_code=?,steadfast_tracking_link=?,steadfast_status='In Review',steadfast_last_error=NULL WHERE id=?",
           [
             result.consignment_id,
             result.tracking_code || null,

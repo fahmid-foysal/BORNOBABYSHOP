@@ -6,18 +6,22 @@ import {
   CheckCircle2,
   ArrowRight,
   FileSpreadsheet,
+  Printer,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, money, downloadCsv } from "../api";
 import { useApp, ErrorBox, Badge, Empty } from "../components";
 import { template, parseSalesCsv } from "../csv";
+import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 export default function BulkSales() {
   const { notify } = useApp();
   const [orders, setOrders] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [send, setSend] = useState(true);
+  const [printAfterDispatch, setPrintAfterDispatch] = useState(false);
   const [result, setResult] = useState(null);
+  const [stickerOrders, setStickerOrders] = useState([]);
   const [filename, setFilename] = useState("");
   const lock = useRef(false);
   async function file(e) {
@@ -31,6 +35,7 @@ export default function BulkSales() {
     setError("");
     setOrders([]);
     setResult(null);
+    setStickerOrders([]);
     setFilename(f.name);
     try {
       setOrders(await parseSalesCsv(f));
@@ -46,13 +51,35 @@ export default function BulkSales() {
     setBusy(true);
     setError("");
     try {
+      const importedOrders = orders;
       const data = await api("/sales/online/bulk", {
         method: "POST",
         body: { orders, send_to_steadfast: send },
       });
       setResult(data);
+      const printable = data.orders
+        .map((created, index) => {
+          const courier = data.dispatch?.results?.find(
+            (entry) => entry.invoice === `ORD-${created.id}`,
+          );
+          if (courier?.status !== "success" || !courier.consignment_id)
+            return null;
+          return {
+            ...importedOrders[index],
+            id: created.id,
+            due: created.due,
+            steadfast_cod_amount: created.due,
+            steadfast_consignment_id: courier.consignment_id,
+          };
+        })
+        .filter(Boolean);
+      setStickerOrders(printable);
       setOrders([]);
       notify(`${data.orders.length} orders created`);
+      if (printAfterDispatch) {
+        if (printable.length) setTimeout(printStickerSheet, 250);
+        else notify("No Steadfast-accepted orders were available to print", "error");
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -219,7 +246,26 @@ export default function BulkSales() {
                 type="checkbox"
                 role="switch"
                 checked={send}
-                onChange={(e) => setSend(e.target.checked)}
+                onChange={(e) => {
+                  setSend(e.target.checked);
+                  if (!e.target.checked) setPrintAfterDispatch(false);
+                }}
+              />
+            </label>
+            <label className="toggle-card">
+              <Printer size={23} />
+              <div>
+                <strong>Print stickers after Steadfast</strong>
+                <small>Prints only orders accepted by the courier</small>
+              </div>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={printAfterDispatch}
+                disabled={!send}
+                onChange={(event) =>
+                  setPrintAfterDispatch(event.target.checked)
+                }
               />
             </label>
             <button className="btn primary" disabled={busy} onClick={create}>
@@ -240,6 +286,12 @@ export default function BulkSales() {
             <Link to="/sales/list" className="btn">
               View online sales <ArrowRight size={16} />
             </Link>
+            {stickerOrders.length > 0 && (
+              <button className="btn" onClick={printStickerSheet}>
+                <Printer size={16} />
+                Print {stickerOrders.length} stickers
+              </button>
+            )}
           </div>
           <div className="panel-content">
             <ErrorBox message={result.dispatch?.error} />
@@ -279,6 +331,7 @@ export default function BulkSales() {
           </div>
         </section>
       )}
+      <StickerSheet orders={stickerOrders} />
     </>
   );
 }

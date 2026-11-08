@@ -8,6 +8,8 @@ import {
   Printer,
   CheckCircle2,
   Package,
+  Banknote,
+  RotateCcw,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, money } from "../api";
@@ -40,6 +42,7 @@ export default function SaleEntry({ channel }) {
   const [checkout, setCheckout] = useState(false);
   const [delivery, setDelivery] = useState(0);
   const [paid, setPaid] = useState(0);
+  const [cashTendered, setCashTendered] = useState(0);
   const [method, setMethod] = useState("");
   const [send, setSend] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -61,6 +64,18 @@ export default function SaleEntry({ channel }) {
     Math.round(
       (subtotal - finalDiscount + (online ? Number(delivery) : 0)) * 100,
     ) / 100;
+  const cashReceived = Math.max(0, Number(cashTendered) || 0);
+  const changeDue =
+    Math.round(Math.max(0, cashReceived - payable) * 100) / 100;
+  const cashShort = Math.round(Math.max(0, payable - cashReceived) * 100) / 100;
+  function updateCashTendered(value) {
+    const amount = Math.max(0, Number(value) || 0);
+    setCashTendered(value === "" ? "" : amount);
+    setPaid(Math.min(amount, payable));
+  }
+  function addCashNote(value) {
+    updateCashTendered(Math.round((cashReceived + value) * 100) / 100);
+  }
   function add(item) {
     const type = item.item_type || item.kind;
     setItems((current) => {
@@ -130,7 +145,8 @@ export default function SaleEntry({ channel }) {
         )
       : 0;
     setDelivery(defaultDelivery);
-    setPaid(online ? 0 : Math.round((subtotal - finalDiscount) * 100) / 100);
+    setPaid(0);
+    setCashTendered(0);
     setMethod(lookups.payment_methods?.[0]?.id || "");
     setCheckout(true);
   }
@@ -160,7 +176,15 @@ export default function SaleEntry({ channel }) {
           send_to_steadfast: send,
         },
       });
-      setCompleted(sale);
+      setCompleted(
+        online
+          ? sale
+          : {
+              ...sale,
+              cash_tendered: cashReceived,
+              change_due: changeDue,
+            },
+      );
       setCheckout(false);
       if (sale.dispatch?.error)
         notify(`Order saved. ${sale.dispatch.error}`, "error");
@@ -178,6 +202,8 @@ export default function SaleEntry({ channel }) {
     setItems([]);
     setCustomer({ cus_name: "", cus_phone: "", cus_address: "" });
     setDiscount(0);
+    setCashTendered(0);
+    setPaid(0);
     setNotes("");
     setError("");
   }
@@ -269,7 +295,6 @@ export default function SaleEntry({ channel }) {
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
-                        e.preventDefault();
                         findCustomer();
                       }
                     }}
@@ -436,16 +461,76 @@ export default function SaleEntry({ channel }) {
                 onChange={setMethod}
                 options={lookups.payment_methods || []}
               />
-              <Field
-                label={online ? "Advance payment" : "Paid amount"}
-                type="number"
-                min="0"
-                max={payable}
-                step="0.01"
-                value={paid}
-                onChange={(e) => setPaid(e.target.value)}
-                required
-              />
+              {online ? (
+                <Field
+                  label="Advance payment"
+                  type="number"
+                  min="0"
+                  max={payable}
+                  step="0.01"
+                  value={paid}
+                  onChange={(e) => setPaid(e.target.value)}
+                  required
+                />
+              ) : (
+                <section className="cash-calculator" aria-label="Cash calculator">
+                  <div className="cash-calculator-heading">
+                    <div>
+                      <span className="cash-icon"><Banknote size={20} /></span>
+                      <div>
+                        <strong>Cash calculator</strong>
+                        <small>Click a note more than once to add it again.</small>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Clear cash received"
+                      aria-label="Clear cash received"
+                      onClick={() => updateCashTendered(0)}
+                    >
+                      <RotateCcw size={16} />
+                    </button>
+                  </div>
+                  <Field label="Cash received" required>
+                    <div className="cash-input-wrap">
+                      <span>৳</span>
+                      <input
+                        data-autofocus="true"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={cashTendered}
+                        onChange={(event) => updateCashTendered(event.target.value)}
+                        required
+                      />
+                    </div>
+                  </Field>
+                  <div className="cash-notes" aria-label="Add cash notes">
+                    {[20, 50, 100, 200, 500, 1000].map((note) => (
+                      <button
+                        type="button"
+                        key={note}
+                        onClick={() => addCashNote(note)}
+                        title={`Add ${note} taka`}
+                      >
+                        + ৳{note}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="exact-cash"
+                      onClick={() => updateCashTendered(payable)}
+                    >
+                      Exact
+                    </button>
+                  </div>
+                  <div className={`cash-result ${changeDue > 0 ? "has-change" : cashShort > 0 ? "is-short" : "is-exact"}`}>
+                    <span>{changeDue > 0 ? "Cashback" : cashShort > 0 ? "Still due" : "Exact cash"}</span>
+                    <strong>{money(changeDue > 0 ? changeDue : cashShort)}</strong>
+                  </div>
+                </section>
+              )}
               {online && (
                 <label className="toggle-card">
                   <Truck size={23} />
@@ -484,6 +569,18 @@ export default function SaleEntry({ channel }) {
                   <span>{online ? "Cash on delivery" : "Remaining due"}</span>
                   <b>{money(Math.max(0, payable - Number(paid)))}</b>
                 </div>
+                {!online && (
+                  <>
+                    <div>
+                      <span>Cash received</span>
+                      <b>{money(cashReceived)}</b>
+                    </div>
+                    <div className="checkout-change-line">
+                      <span>Cashback</span>
+                      <b>{money(changeDue)}</b>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <div className="modal-footer">

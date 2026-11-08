@@ -131,7 +131,7 @@ exports.list = async (type, q) => {
     params,
   );
   const [rows] = await pool.query(
-    `SELECT p.*,${isCombo ? "'combo' item_type,p.combo_name name,COALESCE((SELECT MIN(FLOOR(ps.stock/ci.quantity)) FROM product_combo_items ci JOIN product_stock ps ON ps.product_id=ci.product_id WHERE ci.product_combo_id=p.id),0) stock,(SELECT img_path FROM product_combo_images WHERE product_combo_id=p.id ORDER BY id LIMIT 1) image" : "'product' item_type,p.product_name name,ps.stock,c.category_name,(SELECT img_path FROM product_images WHERE product_id=p.id ORDER BY id LIMIT 1) image"},(SELECT MAX(s.created_at) FROM sale_lines l JOIN all_sales s ON s.id=l.sale_id AND s.channel=l.channel WHERE l.item_type='${isCombo ? "combo" : "product"}' AND l.item_id=p.id AND s.status<>'returned') last_sold FROM ${table} p ${isCombo ? "" : "LEFT JOIN product_stock ps ON ps.product_id=p.id LEFT JOIN categories c ON c.id=p.category_id"}${where} ORDER BY ${q.recent === "1" ? "last_sold DESC," : ""}p.id DESC LIMIT ? OFFSET ?`,
+    `SELECT p.*,${isCombo ? "'combo' item_type,p.combo_name name,COALESCE((SELECT MIN(FLOOR(ps.stock/ci.quantity)) FROM product_combo_items ci JOIN product_stock ps ON ps.product_id=ci.product_id WHERE ci.product_combo_id=p.id),0) stock,(SELECT img_path FROM product_combo_images WHERE product_combo_id=p.id ORDER BY id LIMIT 1) image" : "'product' item_type,p.product_name name,ps.stock,c.category_name,(SELECT img_path FROM product_images WHERE product_id=p.id ORDER BY id LIMIT 1) image"},(SELECT MAX(s.created_at) FROM sale_lines l JOIN all_sales s ON s.id=l.sale_id AND BINARY s.channel=BINARY l.channel WHERE BINARY l.item_type=BINARY '${isCombo ? "combo" : "product"}' AND l.item_id=p.id AND s.status<>'returned') last_sold FROM ${table} p ${isCombo ? "" : "LEFT JOIN product_stock ps ON ps.product_id=p.id LEFT JOIN categories c ON c.id=p.category_id"}${where} ORDER BY ${q.recent === "1" ? "last_sold DESC," : ""}p.id DESC LIMIT ? OFFSET ?`,
     [...params, p.limit, p.offset],
   );
   return pageResult(rows, count[0].total, p);
@@ -164,7 +164,7 @@ exports.search = async (q) => {
     params,
   );
   const [rows] = await pool.query(
-    `SELECT u.*,(SELECT MAX(s.created_at) FROM sale_lines l JOIN all_sales s ON s.id=l.sale_id AND s.channel=l.channel WHERE l.item_type=u.kind AND l.item_id=u.id AND s.status<>'returned') last_sold FROM ${union}${where} ORDER BY last_sold DESC,u.id DESC,u.kind LIMIT ? OFFSET ?`,
+    `SELECT u.*,(SELECT MAX(s.created_at) FROM sale_lines l JOIN all_sales s ON s.id=l.sale_id AND BINARY s.channel=BINARY l.channel WHERE BINARY l.item_type=BINARY u.kind AND l.item_id=u.id AND s.status<>'returned') last_sold FROM ${union}${where} ORDER BY last_sold DESC,u.id DESC,u.kind LIMIT ? OFFSET ?`,
     [...params, p.limit, p.offset],
   );
   for (const row of rows) {

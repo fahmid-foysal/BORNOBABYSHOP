@@ -62,6 +62,18 @@ export function Receipt({ sale }) {
           <strong>{money(v)}</strong>
         </div>
       ))}
+      {sale.channel === "offline" && sale.cash_tendered != null && (
+        <>
+          <div className="receipt-line receipt-cash-line">
+            <span>Cash received</span>
+            <strong>{money(sale.cash_tendered)}</strong>
+          </div>
+          <div className="receipt-line receipt-change-line">
+            <span>Cashback returned</span>
+            <strong>{money(sale.change_due || 0)}</strong>
+          </div>
+        </>
+      )}
       <hr />
       {sale.payments.map((p) => (
         <p key={p.id}>

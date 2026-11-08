@@ -34,6 +34,8 @@ import {
   ShieldCheck,
   ScanBarcode,
   CheckCircle2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { api, today } from "./api";
 import { AppContext, ErrorBox, Busy, moduleLabels, useApp } from "./components";
@@ -103,6 +105,40 @@ const groups = [
     ],
   },
 ];
+
+function focusNextOnEnter(event) {
+  if (
+    event.key !== "Enter" ||
+    event.defaultPrevented ||
+    event.shiftKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey
+  )
+    return;
+  const target = event.target;
+  if (
+    !(target instanceof HTMLInputElement || target instanceof HTMLSelectElement) ||
+    target.closest(".barcode-input") ||
+    ["button", "submit", "checkbox", "radio", "file", "hidden"].includes(
+      target.type,
+    )
+  )
+    return;
+  const form = target.closest("form");
+  if (!form) return;
+  const controls = [...form.querySelectorAll("input,select,textarea")].filter(
+    (control) =>
+      !control.disabled &&
+      control.offsetParent !== null &&
+      !["hidden", "checkbox", "radio", "file"].includes(control.type),
+  );
+  const next = controls[controls.indexOf(target) + 1];
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+  if (typeof next.select === "function" && next.tagName === "INPUT") next.select();
+}
 function Login({ onLogin }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -214,6 +250,9 @@ function Shell() {
     localStorage.getItem("bbs-theme") || "light",
   );
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    localStorage.getItem("bbs-sidebar-collapsed") === "true",
+  );
   const [expanded, setExpanded] = useState({ Sales: true });
   const [navSearch, setNavSearch] = useState("");
   const location = useLocation();
@@ -221,6 +260,9 @@ function Shell() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("bbs-theme", theme);
   }, [theme]);
+  useEffect(() => {
+    localStorage.setItem("bbs-sidebar-collapsed", String(collapsed));
+  }, [collapsed]);
   useEffect(() => {
     if (!sessionStorage.getItem("bbs-token")) {
       setReady(true);
@@ -273,7 +315,9 @@ function Shell() {
         {open && (
           <div className="sidebar-scrim" onClick={() => setOpen(false)} />
         )}
-        <aside className={`sidebar ${open ? "is-open" : ""}`}>
+        <aside
+          className={`sidebar ${open ? "is-open" : ""} ${collapsed ? "is-collapsed" : ""}`}
+        >
           <Link to={landing || "/no-access"} className="brand">
             <img src="/logo.png" alt="Borno Baby Shop" />
             <div>
@@ -281,6 +325,15 @@ function Shell() {
               <small>SHOP WORKSPACE</small>
             </div>
           </Link>
+          <button
+            type="button"
+            className="sidebar-collapse"
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
           <div className="workspace-select">
             <span className="workspace-avatar">B</span>
             <div>
@@ -310,9 +363,11 @@ function Shell() {
                         <>
                           <button
                             className={`nav-link ${children.some((c) => c[1] === location.pathname) ? "parent-active" : ""}`}
-                            onClick={() =>
-                              setExpanded((v) => ({ ...v, [label]: !v[label] }))
-                            }
+                            title={label}
+                            onClick={() => {
+                              if (collapsed) setCollapsed(false);
+                              setExpanded((v) => ({ ...v, [label]: !v[label] }));
+                            }}
                           >
                             <Icon size={18} />
                             <span>{label}</span>
@@ -336,6 +391,7 @@ function Shell() {
                         <NavLink
                           to={path}
                           end
+                          title={label}
                           className={({ isActive }) =>
                             `nav-link ${isActive ? "active" : ""}`
                           }
@@ -382,7 +438,7 @@ function Shell() {
             </button>
           </div>
         </aside>
-        <div className="main-shell">
+        <div className={`main-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
           <header className="topbar">
             <button
               className="icon-btn mobile-menu"
@@ -421,7 +477,7 @@ function Shell() {
               </span>
             </div>
           </header>
-          <main className="page">
+          <main className="page" onKeyDown={focusNextOnEnter}>
             <Routes>
               <Route
                 path="/"

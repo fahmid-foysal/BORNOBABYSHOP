@@ -37,7 +37,7 @@ exports.dashboard = async (q) => {
     recent,
   ] = await Promise.all([
     query(
-      `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal+s.delivery_charge-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON v.channel=s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) cost FROM sale_components WHERE active=1 GROUP BY channel,sale_id) sc ON sc.channel=s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
+      `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal+s.delivery_charge-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON BINARY v.channel=BINARY s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) cost FROM sale_components WHERE active=1 GROUP BY channel,sale_id) sc ON BINARY sc.channel=BINARY s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
       dates,
     ),
     query(
@@ -57,22 +57,22 @@ exports.dashboard = async (q) => {
       dates,
     ),
     query(
-      `SELECT DATE(s.created_at) date,COUNT(*) orders,SUM(l.subtotal-s.final_discount+s.delivery_charge) revenue FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON l.channel=s.channel AND l.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter} GROUP BY DATE(s.created_at) ORDER BY date`,
+      `SELECT DATE(s.created_at) date,COUNT(*) orders,SUM(l.subtotal-s.final_discount+s.delivery_charge) revenue FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter} GROUP BY DATE(s.created_at) ORDER BY date`,
       dates,
     ),
     query(
-      `SELECT COALESCE(e.name,'Unassigned') name,COUNT(*) orders,SUM(l.units) quantity,SUM(l.subtotal-s.final_discount+s.delivery_charge) revenue FROM all_sales s LEFT JOIN employees e ON e.id=s.sales_employee_id JOIN (SELECT channel,sale_id,SUM(quantity) units,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON l.channel=s.channel AND l.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter} GROUP BY s.sales_employee_id,e.name ORDER BY quantity DESC`,
+      `SELECT COALESCE(e.name,'Unassigned') name,COUNT(*) orders,SUM(l.units) quantity,SUM(l.subtotal-s.final_discount+s.delivery_charge) revenue FROM all_sales s LEFT JOIN employees e ON e.id=s.sales_employee_id JOIN (SELECT channel,sale_id,SUM(quantity) units,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter} GROUP BY s.sales_employee_id,e.name ORDER BY quantity DESC`,
       dates,
     ),
     query(
-      `SELECT COALESCE(c.category_name,'Uncategorized') name,SUM(GREATEST(sc.quantity-sc.returned_quantity,0)) quantity FROM sale_components sc JOIN all_sales s ON s.channel=sc.channel AND s.id=sc.sale_id LEFT JOIN categories c ON c.id=sc.category_id WHERE sc.active=1 AND s.${dateFilter} GROUP BY sc.category_id,c.category_name ORDER BY quantity DESC`,
+      `SELECT COALESCE(c.category_name,'Uncategorized') name,SUM(GREATEST(sc.quantity-sc.returned_quantity,0)) quantity FROM sale_components sc JOIN all_sales s ON BINARY s.channel=BINARY sc.channel AND s.id=sc.sale_id LEFT JOIN categories c ON c.id=sc.category_id WHERE sc.active=1 AND s.${dateFilter} GROUP BY sc.category_id,c.category_name ORDER BY quantity DESC`,
       dates,
     ),
     query(
       "SELECT COALESCE(e.name,'Unassigned') name,COUNT(*) orders FROM all_sales s LEFT JOIN employees e ON e.id=s.sales_employee_id WHERE s.status<>'returned' AND DATE(s.created_at)=CURDATE() GROUP BY s.sales_employee_id,e.name ORDER BY orders DESC",
     ),
     query(
-      `SELECT s.channel,s.id,s.status,s.created_at,c.cus_name,COALESCE(e.name,'Unassigned') sales_person_name,l.subtotal-s.final_discount+s.delivery_charge payable FROM all_sales s JOIN customers c ON c.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON l.channel=s.channel AND l.sale_id=s.id WHERE s.${dateFilter} ORDER BY s.created_at DESC,s.id DESC LIMIT 6`,
+      `SELECT s.channel,s.id,s.status,s.created_at,c.cus_name,COALESCE(e.name,'Unassigned') sales_person_name,l.subtotal-s.final_discount+s.delivery_charge payable FROM all_sales s JOIN customers c ON c.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id WHERE s.${dateFilter} ORDER BY s.created_at DESC,s.id DESC LIMIT 6`,
       dates,
     ),
   ]);
@@ -318,7 +318,7 @@ exports.report = async (type, q) => {
     group.push("l.item_type", "l.item_id", "l.item_name");
   }
   const rows = await query(
-    `SELECT ${select.join(",")},COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,SUM(l.quantity) quantity,SUM(l.quantity*l.rate) gross_sales,SUM(COALESCE(s.final_discount/NULLIF(st.subtotal,0),0)*l.quantity*l.rate) allocated_discount,SUM(l.quantity*l.rate-COALESCE(s.final_discount/NULLIF(st.subtotal,0),0)*l.quantity*l.rate) net_sales FROM all_sales s JOIN sale_lines l ON l.channel=s.channel AND l.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) st ON st.channel=s.channel AND st.sale_id=s.id LEFT JOIN employees e ON e.id=s.sales_employee_id WHERE s.status<>'returned' AND s.${dateFilter} GROUP BY ${group.join(",")} ORDER BY period DESC,net_sales DESC`,
+    `SELECT ${select.join(",")},COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,SUM(l.quantity) quantity,SUM(l.quantity*l.rate) gross_sales,SUM(COALESCE(s.final_discount/NULLIF(st.subtotal,0),0)*l.quantity*l.rate) allocated_discount,SUM(l.quantity*l.rate-COALESCE(s.final_discount/NULLIF(st.subtotal,0),0)*l.quantity*l.rate) net_sales FROM all_sales s JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) st ON BINARY st.channel=BINARY s.channel AND st.sale_id=s.id LEFT JOIN employees e ON e.id=s.sales_employee_id WHERE s.status<>'returned' AND s.${dateFilter} GROUP BY ${group.join(",")} ORDER BY period DESC,net_sales DESC`,
     [from, to],
   );
   return { from, to, rows };

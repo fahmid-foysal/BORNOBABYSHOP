@@ -19,6 +19,8 @@ const schema = z.object({
     .max(500),
   paid_amount: amount.default(0),
   payment_method_id: id.nullable().optional(),
+  total_bill: amount.optional(),
+  carrying_cost: amount.default(0),
 });
 exports.detail = async (key) => {
   const row = await one(
@@ -139,6 +141,21 @@ exports.save = async (raw, key, user) => {
         409,
         "Purchase total cannot be lower than recorded payments",
       );
+    if (!key && b.carrying_cost > 0) {
+      const [accounts] = await db.query(
+        "SELECT id FROM expense_accounts WHERE UPPER(TRIM(title))='CARRYING_COST' ORDER BY id LIMIT 1 FOR UPDATE",
+      );
+      const expenseAccountId = accounts[0]?.id || await insert(db, "expense_accounts", { title: "CARRYING_COST" });
+      await insert(db, "expenses", {
+        expense_account_id: expenseAccountId,
+        narration: `Carrying cost for purchase PUR-${purchaseId}`,
+        amount: b.carrying_cost,
+        expense_date: new Date().toLocaleDateString("en-CA", {
+          timeZone: "Asia/Dhaka",
+        }),
+        created_by: user.id,
+      });
+    }
     return { id: purchaseId };
   });
 };

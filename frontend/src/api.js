@@ -68,3 +68,44 @@ export function downloadCsv(rows, name) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+export async function downloadXlsx(rows, name, sheetName = "Report") {
+  if (!rows.length) return;
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName.slice(0, 31));
+  const keys = Object.keys(rows[0]);
+  worksheet.columns = keys.map((key) => ({
+    header: key.replaceAll("_", " "),
+    key,
+    width: Math.min(40, Math.max(12, key.length + 3)),
+  }));
+  rows.forEach((row) => worksheet.addRow(row));
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  const buffer = await workbook.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export async function downloadPdf(rows, name, title = "Report") {
+  if (!rows.length) return;
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  const keys = Object.keys(rows[0]);
+  const doc = new jsPDF({ orientation: keys.length > 5 ? "landscape" : "portrait" });
+  doc.setFontSize(14);
+  doc.text(title, 14, 14);
+  autoTableModule.default(doc, {
+    startY: 20,
+    head: [keys.map((key) => key.replaceAll("_", " "))],
+    body: rows.map((row) => keys.map((key) => String(row[key] ?? ""))),
+    styles: { fontSize: 7, cellPadding: 1.5 },
+    headStyles: { fillColor: [14, 143, 146] },
+  });
+  doc.save(name);
+}

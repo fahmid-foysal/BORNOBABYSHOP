@@ -10,6 +10,9 @@
   "test:browser": "node scripts/browser-smoke.mjs"
  },
  "dependencies": {
+  "exceljs": "^4.4.0",
+  "jspdf": "^4.2.1",
+  "jspdf-autotable": "^5.0.9",
   "lucide-react": "^0.468.0",
   "papaparse": "^5.5.3",
   "react": "^19.1.1",
@@ -25,5 +28,8 @@
  },
  "engines": {
   "node": ">=20.19"
+ },
+ "overrides": {
+  "uuid": "^11.1.1"
  }
 }

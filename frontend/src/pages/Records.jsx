@@ -6,8 +6,9 @@ import {
   Trash2,
   KeyRound,
   SlidersHorizontal,
+  Download,
 } from "lucide-react";
-import { api, qs, money, number, today } from "../api";
+import { api, qs, money, number, today, downloadCsv } from "../api";
 import {
   useApp,
   useData,
@@ -130,6 +131,20 @@ export default function Records({ resource: given }) {
     setEditing(null);
   }, [resource]);
   if (!def) return <Empty title="Module not found" />;
+  async function downloadSalespeople() {
+    try {
+      const rows = [];
+      let nextPage = 1;
+      let pages = 1;
+      do {
+        const result = await api(`/master/employees?${qs({ page: nextPage, limit: 100 })}`);
+        rows.push(...result.rows.map(({ name, phone, rank }) => ({ name, phone, rank })));
+        pages = result.pages;
+        nextPage += 1;
+      } while (nextPage <= pages);
+      downloadCsv(rows, "borno-salespeople.csv");
+    } catch (e) { notify(e.message, "error"); }
+  }
   const change = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   function edit(row) {
     setError("");
@@ -228,10 +243,10 @@ export default function Records({ resource: given }) {
           <h1>{def.title}</h1>
           <p>{def.description}</p>
         </div>
-        <button className="btn primary" onClick={() => edit(null)}>
-          <Plus size={17} />
-          Add {resource === "users" ? "user" : "record"}
-        </button>
+        <div className="row-actions wrap">
+          {resource === "employees" && <button className="btn" onClick={downloadSalespeople}><Download size={17} />Salespeople CSV</button>}
+          <button className="btn primary" onClick={() => edit(null)}><Plus size={17} />Add {resource === "users" ? "user" : "record"}</button>
+        </div>
       </div>
       <section className="panel">
         <div className="toolbar">

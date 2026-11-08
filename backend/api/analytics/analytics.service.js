@@ -35,6 +35,7 @@ exports.dashboard = async (q) => {
     categories,
     todayPeople,
     recent,
+    stockValue,
   ] = await Promise.all([
     query(
       `SELECT COUNT(*) orders,COALESCE(SUM(v.subtotal-s.final_discount+s.delivery_charge),0) revenue,COALESCE(SUM(v.quantity),0) units,COALESCE(SUM(v.subtotal+s.delivery_charge-s.final_discount-sc.cost),0) gross_profit FROM all_sales s JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal,SUM(quantity) quantity FROM sale_lines GROUP BY channel,sale_id) v ON BINARY v.channel=BINARY s.channel AND v.sale_id=s.id JOIN (SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) cost FROM sale_components WHERE active=1 GROUP BY channel,sale_id) sc ON BINARY sc.channel=BINARY s.channel AND sc.sale_id=s.id WHERE s.status<>'returned' AND s.${dateFilter}`,
@@ -75,6 +76,9 @@ exports.dashboard = async (q) => {
       `SELECT s.channel,s.id,s.status,s.created_at,c.cus_name,COALESCE(e.name,'Unassigned') sales_person_name,l.subtotal-s.final_discount+s.delivery_charge payable FROM all_sales s JOIN customers c ON c.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id WHERE s.${dateFilter} ORDER BY s.created_at DESC,s.id DESC LIMIT 6`,
       dates,
     ),
+    query(
+      "SELECT COALESCE(SUM(GREATEST(ps.stock,0)*p.purchase_price),0) total FROM product_stock ps JOIN products p ON p.id=ps.product_id",
+    ),
   ]);
   const salePayments = cash[0].total;
   const cashIn = round(salePayments + incomes[0].total);
@@ -105,6 +109,7 @@ exports.dashboard = async (q) => {
     net_operating_profit: round(
       sales[0].gross_profit + incomes[0].total - expenses[0].total,
     ),
+    current_stock_value: stockValue[0].total,
     trend: dailyTrend,
     people,
     categories,

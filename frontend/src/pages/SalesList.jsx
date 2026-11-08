@@ -14,6 +14,8 @@ import {
   Copy,
   StickyNote,
   MapPin,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { api, qs, money, defaultDates } from "../api";
 import {
@@ -28,6 +30,8 @@ import {
   Pager,
   Badge,
   DateRange,
+  ItemPicker,
+  ItemTable,
 } from "../components";
 import { Receipt } from "../receipt";
 import { StickerSheet, printStickerSheet } from "../delivery-sticker";
@@ -105,6 +109,8 @@ export default function SalesList() {
   const [refreshingId, setRefreshingId] = useState(null);
   const [returnSelection, setReturnSelection] = useState({});
   const [returnRefund, setReturnRefund] = useState(null);
+  const [editItems, setEditItems] = useState([]);
+  const [editPicker, setEditPicker] = useState(false);
   const {
     data,
     loading,
@@ -195,6 +201,52 @@ export default function SalesList() {
       );
       setReturnRefund(null);
     }
+    if (mode === "edit")
+      setEditItems(
+        row.items.map((item) => ({
+          item_type: item.item_type,
+          item_id: Number(item.item_id),
+          name: item.item_name,
+          barcode: item.barcode,
+          quantity: Number(item.quantity),
+          rate: Number(item.rate),
+        })),
+      );
+  }
+  async function removeOrder(row) {
+    if (!window.confirm(`Delete ${channel === "online" ? "ORD" : "POS"}-${row.id}? This cannot be undone.`)) return;
+    try {
+      await api(`/sales/${channel}/${row.id}`, { method: "DELETE" });
+      setSelectedRows((current) => { const next = { ...current }; delete next[row.id]; return next; });
+      setVersion((v) => v + 1);
+      notify("Order deleted and stock restored");
+    } catch (e) { notify(e.message, "error"); }
+  }
+  async function saveEdit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      if (!editItems.length) throw new Error("Add at least one item");
+      const fields = Object.fromEntries(new FormData(e.target));
+      await api(`/sales/${channel}/${dialog.row.id}`, {
+        method: "PUT",
+        body: {
+          customer: { cus_name: fields.cus_name, cus_phone: fields.cus_phone, cus_address: fields.cus_address || "" },
+          items: editItems.map(({ item_type, item_id, quantity, rate }) => ({ item_type, item_id: Number(item_id), quantity: Number(quantity), rate: Number(rate) })),
+          final_discount: Number(fields.final_discount || 0),
+          delivery_charge: channel === "online" ? Number(fields.delivery_charge || 0) : 0,
+          paid_amount: 0,
+          payment_method_id: null,
+          sales_employee_id: fields.sales_employee_id ? Number(fields.sales_employee_id) : null,
+          notes: fields.notes || null,
+          send_to_steadfast: false,
+        },
+      });
+      setDialog(null);
+      setVersion((v) => v + 1);
+      notify("Order details and items updated");
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   async function submit(e) {
     e.preventDefault();
@@ -538,6 +590,12 @@ export default function SalesList() {
                         >
                           <Eye size={16} />
                         </button>
+                        <button className="icon-btn" title="Edit customer and items" onClick={() => open("edit", row)}>
+                          <Pencil size={16} />
+                        </button>
+                        <button className="icon-btn danger" title="Delete order" onClick={() => removeOrder(row)}>
+                          <Trash2 size={16} />
+                        </button>
                         <button
                           className="icon-btn"
                           title="See all payments"
@@ -611,17 +669,57 @@ export default function SalesList() {
         />
       </section>
       <StickerSheet orders={selectedOrders} />
+      {editPicker && (
+        <ItemPicker
+          selected={editItems}
+          onChange={setEditItems}
+          onClose={() => setEditPicker(false)}
+        />
+      )}
       {dialog && (
         <Modal
-          title={`${dialog.mode === "detail" ? "Order" : dialog.mode === "payments" ? "Payment history" : dialog.mode === "return" ? "Return order" : dialog.mode === "reconcile" ? "Reconcile Steadfast dispatch" : "Add payment"} · ${channel === "online" ? "ORD" : "POS"}-${dialog.row.id}`}
+          title={`${dialog.mode === "detail" ? "Order" : dialog.mode === "edit" ? "Edit order" : dialog.mode === "payments" ? "Payment history" : dialog.mode === "return" ? "Return order" : dialog.mode === "reconcile" ? "Reconcile Steadfast dispatch" : "Add payment"} · ${channel === "online" ? "ORD" : "POS"}-${dialog.row.id}`}
           onClose={() => !busy && setDialog(null)}
           wide={
             dialog.mode === "detail" ||
+            dialog.mode === "edit" ||
             dialog.mode === "payments" ||
             dialog.mode === "return"
           }
         >
-          {dialog.mode === "detail" ? (
+          {dialog.mode === "edit" ? (
+            <form onSubmit={saveEdit}>
+              <div className="modal-body">
+                <ErrorBox message={error} />
+                {channel === "online" && dialog.row.sent_to_steadfast && (
+                  <div className="info-note">This order is linked to Steadfast. The edit changes the ERP record only; it does not modify the courier booking.</div>
+                )}
+                <div className="form-grid">
+                  <Field label="Customer name" name="cus_name" defaultValue={dialog.row.cus_name} required />
+                  <Field label="Phone" name="cus_phone" defaultValue={dialog.row.cus_phone} required />
+                  <Field label="Address" name="cus_address" defaultValue={dialog.row.cus_address} required={channel === "online"} />
+                  <Field label="Sales person">
+                    <select name="sales_employee_id" defaultValue={dialog.row.sales_employee_id || ""}>
+                      <option value="">Unassigned</option>
+                      {(lookups.employees || []).map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Discount" name="final_discount" type="number" step="0.01" defaultValue={dialog.row.discount} hint="Negative values increase the order total." />
+                  {channel === "online" && <Field label="Delivery charge" name="delivery_charge" type="number" min="0" step="0.01" defaultValue={dialog.row.delivery_charge} />}
+                  <Field label="Notes" name="notes" defaultValue={dialog.row.notes || ""} />
+                </div>
+                <div className="section-heading">
+                  <h3>Order items</h3>
+                  <button type="button" className="btn" onClick={() => setEditPicker(true)}><Plus size={15} />Add items</button>
+                </div>
+                <ItemTable items={editItems} onChange={setEditItems} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn" onClick={() => setDialog(null)} disabled={busy}>Cancel</button>
+                <button className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+              </div>
+            </form>
+          ) : dialog.mode === "detail" ? (
             <>
               <div className="modal-body">
                 <Receipt sale={dialog.row} />

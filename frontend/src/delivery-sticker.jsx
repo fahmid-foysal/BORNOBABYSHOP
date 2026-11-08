@@ -30,6 +30,17 @@ export function DeliverySticker({ order }) {
         <span>Note:</span>
         <strong>{order.notes || "—"}</strong>
       </div>
+      <div className="sticker-items">
+        <span>Items:</span>
+        <ul>
+          {(order.items || []).map((item, index) => (
+            <li key={`${item.item_type || "item"}-${item.line_id || item.item_id || index}`}>
+              <strong>{item.item_name || item.name || "Item"}</strong>
+              <b> x {item.quantity}</b>
+            </li>
+          ))}
+        </ul>
+      </div>
       <footer>
         <span>COD:</span>
         <strong>{money(cod)}</strong>
@@ -52,7 +63,7 @@ export function StickerSheet({ orders }) {
 export function printStickerSheet() {
   const pageStyle = document.createElement("style");
   pageStyle.id = "delivery-sticker-page-size";
-  pageStyle.textContent = "@page { size: 3in 2in; margin: 0; }";
+  pageStyle.textContent = "@page { size: 2in 3in; margin: 0; }";
   document.head.appendChild(pageStyle);
   document.body.classList.add("printing-stickers");
   let cleaned = false;

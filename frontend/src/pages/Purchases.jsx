@@ -42,6 +42,8 @@ export default function Purchases() {
       notes: row?.notes || "",
       paid_amount: 0,
       payment_method_id: "",
+      total_bill: "",
+      carrying_cost: 0,
     });
     setItems(
       (row?.items || []).map((i) => ({
@@ -74,6 +76,12 @@ export default function Purchases() {
             quantity: Number(i.quantity),
             rate: Number(i.rate),
           })),
+          ...(!editing.id
+            ? {
+                total_bill: Number(form.total_bill || total),
+                carrying_cost: Number(form.carrying_cost || 0),
+              }
+            : {}),
         },
       });
       setEditing(null);
@@ -242,6 +250,33 @@ export default function Purchases() {
                 <span>Purchase total</span>
                 <strong>{money(total)}</strong>
               </div>
+              {!editing.id && <div className="form-grid">
+                <Field
+                  label="Total bill"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.total_bill ?? ""}
+                  hint="Enter the supplier's complete bill. Any positive difference becomes carrying cost."
+                  onChange={(e) => {
+                    const bill = e.target.value;
+                    setForm({
+                      ...form,
+                      total_bill: bill,
+                      carrying_cost: Math.max(0, Number(bill || 0) - total),
+                    });
+                  }}
+                />
+                <Field
+                  label="Carrying cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.carrying_cost ?? 0}
+                  hint="Saved as a CARRYING_COST expense for this purchase."
+                  onChange={(e) => setForm({ ...form, carrying_cost: e.target.value })}
+                />
+              </div>}
               {!editing.id && (
                 <div className="form-grid">
                   <Field

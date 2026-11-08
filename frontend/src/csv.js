@@ -18,12 +18,14 @@ const modeHeaders = {
     "customer_phone",
     "customer_address",
     "total_paid",
-    "total_payable",
+    "cod_amount",
     "item_type",
     "barcode",
     "quantity",
     "payment_method",
     "sales_employee",
+    "notes",
+    "product_name",
   ],
   mode2: [
     ...commonValueFields,
@@ -45,12 +47,14 @@ export const bulkTemplates = {
       customer_phone: "",
       customer_address: "",
       total_paid: "",
-      total_payable: "",
+      cod_amount: "",
       item_type: "product",
       barcode: "A1B2C",
       quantity: 2,
       payment_method: "",
       sales_employee: "",
+      notes: "",
+      product_name: "Sample product name",
     },
     {
       order_ref: "WEB-001",
@@ -58,12 +62,14 @@ export const bulkTemplates = {
       customer_phone: "01712345678",
       customer_address: "Dhanmondi, Dhaka",
       total_paid: 0,
-      total_payable: 1000,
+      cod_amount: 1000,
       item_type: "combo",
       barcode: "D3E4F",
       quantity: 1,
       payment_method: "",
       sales_employee: "",
+      notes: "Call first",
+      product_name: "Sample combo name",
     },
   ],
   mode2: [
@@ -234,7 +240,10 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
   const text = await file.text();
   const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim() });
   if (parsed.errors.length) throw new Error(parsed.errors[0].message);
-  for (const field of expectedHeaders) {
+  const requiredHeaders = mode === "mode1"
+    ? expectedHeaders.filter((field) => !["notes", "product_name"].includes(field))
+    : expectedHeaders;
+  for (const field of requiredHeaders) {
     if (!parsed.meta.fields?.includes(field)) throw new Error(`Missing column: ${field}`);
   }
 
@@ -300,8 +309,8 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
       ? {
           ...commonHeader,
           total_paid: optionalNumberValue("total_paid"),
-          total_payable: optionalNumberValue("total_payable"),
-          notes: "",
+          cod_amount: optionalNumberValue("cod_amount"),
+          notes: String(row.notes ?? "").trim(),
         }
       : {
           ...commonHeader,
@@ -319,7 +328,8 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
         "customer_phone",
         "customer_address",
         "total_paid",
-        "total_payable",
+        "cod_amount",
+        "notes",
         "payment_method_id",
         "sales_employee_id",
       ]) {
@@ -356,7 +366,7 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
           throw new Error(`${orderRef}: ${field} must be provided on one row of the order`);
         }
       }
-      for (const field of ["total_paid", "total_payable"]) {
+      for (const field of ["total_paid", "cod_amount"]) {
         if (group.header[field] == null) {
           throw new Error(`${orderRef}: ${field} must be provided on one row of the order`);
         }
@@ -368,10 +378,8 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
     let paidAmount;
 
     if (mode === "mode1") {
-      if (group.header.total_payable > subtotal) {
-        throw new Error(`${orderRef}: total_payable cannot exceed product subtotal when delivery charge is zero`);
-      }
-      finalDiscount = roundedMoney(subtotal - group.header.total_payable);
+      const totalBill = roundedMoney(group.header.total_paid + group.header.cod_amount);
+      finalDiscount = roundedMoney(subtotal - totalBill);
       deliveryCharge = 0;
       paidAmount = group.header.total_paid;
     } else {

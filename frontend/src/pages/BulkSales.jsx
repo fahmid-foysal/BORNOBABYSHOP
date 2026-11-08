@@ -115,7 +115,7 @@ export default function BulkSales() {
           <strong>Choose CSV mode</strong>
           <p className="muted">
             {importMode === "mode1"
-              ? "Mode 1 uses current sale prices, zero delivery charge, and calculates the discount from total payable."
+              ? "Mode 1 uses current sale prices, zero delivery charge, and calculates the bill from total paid + COD amount."
               : "Mode 2 lets the CSV provide rate, discount, delivery charge, paid amount, and notes."}
           </p>
         </div>
@@ -132,7 +132,7 @@ export default function BulkSales() {
               setError("");
             }}
           >
-            Mode 1 · Total payable
+            Mode 1 · Paid + COD
           </button>
           <button
             type="button"
@@ -187,8 +187,9 @@ export default function BulkSales() {
             <strong>A few details before you import</strong>
             <p>
               Keep phone numbers as text to preserve the leading zero.
-              In Mode 1, customer details and totals may be entered on only one
-              row per order; item rows beneath may leave them blank. In Mode 2,
+              In Mode 1, customer details, total_paid, cod_amount and notes may
+              be entered on only one row per order; product_name is optional and
+              informational only. Item rows beneath may leave those fields blank. In Mode 2,
               order-level fields must match across rows with the same order_ref.
               Payment method and sales employee are matched by name without
               case sensitivity. Replace sample barcodes with actual catalog

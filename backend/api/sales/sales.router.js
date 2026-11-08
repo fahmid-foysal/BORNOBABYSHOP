@@ -17,6 +17,8 @@ router.param("channel", (req, res, next, value) => {
 router.get("/:channel", action(c.list));
 router.get("/:channel/:id", action(c.detail));
 router.post("/:channel", action(c.create));
+router.put("/:channel/:id", action(c.update));
+router.delete("/:channel/:id", action(c.remove));
 router.post("/:channel/:id/payments", action(c.payment));
 router.post("/:channel/:id/return", action(c.returnSale));
 module.exports = router;

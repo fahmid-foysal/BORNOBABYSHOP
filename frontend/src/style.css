@@ -4273,7 +4273,7 @@ td small {
   body.printing-stickers .app-shell,
   body.printing-stickers .main-shell,
   body.printing-stickers .page {
-    width: 3in !important;
+    width: 2in !important;
     min-width: 3in !important;
     max-width: 3in !important;
     margin: 0 !important;
@@ -4295,8 +4295,8 @@ td small {
   body.printing-stickers .delivery-sticker {
     display: flex !important;
     flex-direction: column;
-    width: 3in !important;
-    height: 2in !important;
+    width: 2in !important;
+    height: 3in !important;
     margin: 0 !important;
     padding: 0.12in !important;
     overflow: hidden !important;
@@ -4351,6 +4351,18 @@ td small {
   body.printing-stickers .sticker-note {
     font-size: 7.5pt;
   }
+  body.printing-stickers .sticker-items {
+    display: grid;
+    grid-template-columns: 0.36in minmax(0, 1fr);
+    gap: 0.04in;
+    margin: 0.02in 0 0.04in;
+    padding-top: 0.04in;
+    border-top: 1px solid #000;
+    font-size: 7.5pt;
+  }
+  body.printing-stickers .sticker-items > span { font-weight: 700; }
+  body.printing-stickers .sticker-items ul { margin: 0; padding: 0; list-style: none; }
+  body.printing-stickers .sticker-items li { margin: 0 0 0.025in; overflow-wrap: anywhere; }
   body.printing-stickers .delivery-sticker footer {
     display: flex;
     align-items: baseline;

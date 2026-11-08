@@ -11,6 +11,7 @@ const {
   pageResult,
 } = require("../../lib/http");
 const { totals, round, expandComponents } = require("../../lib/sale-math");
+const signedAmount = z.coerce.number().finite().min(-999999999999).max(999999999999).multipleOf(0.01);
 const saleSchema = z.object({
   customer: z.object({
     cus_name: z.string().trim().min(1).max(255),
@@ -28,7 +29,7 @@ const saleSchema = z.object({
     )
     .min(1)
     .max(500),
-  final_discount: amount.default(0),
+  final_discount: signedAmount.default(0),
   delivery_charge: amount.default(0),
   paid_amount: amount.default(0),
   payment_method_id: id.nullable().optional(),
@@ -300,6 +301,102 @@ exports.list = async (c, q) => {
     );
   }
   return result;
+};
+exports.update = async (c, key, raw) => {
+  channel(c);
+  const b = saleSchema.parse(raw);
+  return transaction(async (db) => {
+    const saleId = id.parse(key);
+    const sale = await one(db, `SELECT * FROM ${c}_sales WHERE id=? FOR UPDATE`, [saleId]);
+    if (sale.return_status && sale.return_status !== "none")
+      throw new HttpError(409, "Orders with returns cannot be edited");
+    if (c === "online" && !b.customer.cus_address)
+      throw new HttpError(400, "Online orders require a delivery address");
+
+    const [returnRows] = await db.query("SELECT id FROM sale_returns WHERE channel=? AND sale_id=? LIMIT 1", [c, saleId]);
+    if (returnRows.length) throw new HttpError(409, "Orders with returns cannot be edited");
+    const [[paymentRow]] = await db.query(`SELECT COALESCE(SUM(amount),0) paid FROM ${c}_sale_payments WHERE ${c}_sale_id=?`, [saleId]);
+    const value = totals(b.items, b.final_discount, c === "online" ? b.delivery_charge : 0, paymentRow.paid);
+    if (b.final_discount > value.subtotal) throw new HttpError(400, "Discount exceeds the subtotal");
+    if (Number(paymentRow.paid) > value.payable) throw new HttpError(409, "Edited order total cannot be lower than recorded payments");
+
+    const combos = new Map();
+    for (const item of b.items) {
+      if (item.item_type === "combo" && !combos.has(String(item.item_id))) {
+        await one(db, "SELECT id FROM product_combos WHERE id=? FOR UPDATE", [item.item_id]);
+        const [parts] = await db.query("SELECT product_id,quantity FROM product_combo_items WHERE product_combo_id=?", [item.item_id]);
+        if (!parts.length) throw new HttpError(400, "Combo has no products");
+        combos.set(String(item.item_id), parts);
+      }
+    }
+    const required = expandComponents(b.items, combos);
+    const [oldRows] = await db.query("SELECT product_id,quantity,returned_quantity,cost_rate,category_id FROM sale_components WHERE channel=? AND sale_id=? AND active=1", [c, saleId]);
+    const old = new Map(oldRows.map((row) => [String(row.product_id), row]));
+    const products = new Map();
+    for (const [productId, quantity] of [...required].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+      const product = await one(db, "SELECT p.*,ps.stock FROM products p JOIN product_stock ps ON ps.product_id=p.id WHERE p.id=? FOR UPDATE", [productId]);
+      if (product.status !== "active") throw new HttpError(409, `${product.product_name} is inactive`);
+      const previousAvailable = old.has(productId) ? Math.max(0, Number(old.get(productId).quantity) - Number(old.get(productId).returned_quantity || 0)) : 0;
+      if (Number(product.stock) + previousAvailable < quantity)
+        throw new HttpError(409, `Insufficient stock for ${product.product_name}: ${Number(product.stock) + previousAvailable} available`);
+      products.set(productId, product);
+    }
+
+    await db.query("INSERT INTO customers SET ? ON DUPLICATE KEY UPDATE cus_name=VALUES(cus_name),cus_address=VALUES(cus_address)", [b.customer]);
+    const customer = await one(db, "SELECT id FROM customers WHERE cus_phone=?", [b.customer.cus_phone]);
+    const header = {
+      customer_id: customer.id,
+      status: value.due > 0 ? "due" : "paid",
+      notes: b.notes || null,
+      sales_employee_id: b.sales_employee_id || null,
+      final_discount: b.final_discount,
+    };
+    if (c === "online") Object.assign(header, {
+      delivery_charge: b.delivery_charge,
+      steadfast_cod_amount: round(value.payable - Number(paymentRow.paid)),
+      steadfast_note: b.notes || null,
+    });
+    await db.query(`UPDATE ${c}_sales SET ? WHERE id=?`, [header, saleId]);
+    await db.query("DELETE FROM sale_line_components WHERE channel=? AND sale_id=?", [c, saleId]);
+    await db.query(`DELETE FROM ${c}_sale_products WHERE ${c}_sale_id=?`, [saleId]);
+    await db.query(`DELETE FROM ${c}_sale_combos WHERE ${c}_sale_id=?`, [saleId]);
+    await db.query("DELETE FROM sale_components WHERE channel=? AND sale_id=?", [c, saleId]);
+    for (const item of b.items) {
+      const lineId = await insert(db, `${c}_sale_${item.item_type === "combo" ? "combos" : "products"}`, {
+        [`${c}_sale_id`]: saleId,
+        [item.item_type === "combo" ? "product_combo_id" : "product_id"]: item.item_id,
+        quantity: item.quantity,
+        rate: item.rate,
+        returned_quantity: 0,
+        status: "active",
+      });
+      const parts = item.item_type === "combo" ? combos.get(String(item.item_id)) : [{ product_id: item.item_id, quantity: 1 }];
+      for (const part of parts) await insert(db, "sale_line_components", { channel: c, sale_id: saleId, item_type: item.item_type, sale_line_id: lineId, product_id: part.product_id, component_quantity: part.quantity });
+    }
+    for (const [productId, quantity] of required) {
+      const previous = old.get(productId);
+      const product = products.get(productId);
+      await insert(db, "sale_components", { channel: c, sale_id: saleId, product_id: productId, quantity, returned_quantity: 0, cost_rate: previous?.cost_rate ?? product.purchase_price, category_id: previous?.category_id ?? product.category_id, active: 1 });
+    }
+    return { id: saleId };
+  }).then((result) => exports.detail(c, result.id));
+};
+exports.remove = async (c, key) => {
+  channel(c);
+  return transaction(async (db) => {
+    const saleId = id.parse(key);
+    const sale = await one(db, `SELECT * FROM ${c}_sales WHERE id=? FOR UPDATE`, [saleId]);
+    const [[payments]] = await db.query(`SELECT COUNT(*) count FROM ${c}_sale_payments WHERE ${c}_sale_id=?`, [saleId]);
+    const [[returns]] = await db.query("SELECT COUNT(*) count FROM sale_returns WHERE channel=? AND sale_id=?", [c, saleId]);
+    if (Number(payments.count) || Number(returns.count)) throw new HttpError(409, "Orders with payments or returns cannot be deleted");
+    if (c === "online" && (sale.sent_to_steadfast || sale.steadfast_consignment_id)) throw new HttpError(409, "Courier-linked orders cannot be deleted");
+    await db.query("DELETE FROM sale_line_components WHERE channel=? AND sale_id=?", [c, saleId]);
+    await db.query(`DELETE FROM ${c}_sale_products WHERE ${c}_sale_id=?`, [saleId]);
+    await db.query(`DELETE FROM ${c}_sale_combos WHERE ${c}_sale_id=?`, [saleId]);
+    await db.query("DELETE FROM sale_components WHERE channel=? AND sale_id=?", [c, saleId]);
+    await db.query(`DELETE FROM ${c}_sales WHERE id=?`, [saleId]);
+    return { deleted: true };
+  });
 };
 async function paymentState(db, c, key) {
   const sale = await one(db, `SELECT * FROM ${c}_sales WHERE id=? FOR UPDATE`, [

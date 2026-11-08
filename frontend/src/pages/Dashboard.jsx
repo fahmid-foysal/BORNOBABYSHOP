@@ -129,6 +129,13 @@ export default function Dashboard() {
                   icon: Package,
                   color: "blue",
                 },
+                {
+                  label: "Current stock value",
+                  value: money(d.current_stock_value),
+                  detail: "Available quantity × current purchase price",
+                  icon: Package,
+                  color: "teal",
+                },
               ].map((s) => (
                 <article className="stat-card" key={s.label}>
                   <div>
@@ -508,6 +515,10 @@ export default function Dashboard() {
               )}
             </section>
             <p className="calculation-note">
+              <strong>Net operating profit formula:</strong> product subtotal +
+              delivery charge − discount + other income − expenses − sold
+              purchase cost. Negative discounts therefore increase sales value.
+              {" "}
               Cash profit uses receipt and payout creation dates. Gross trading
               profit uses sale-time product cost snapshots; net operating profit
               adds other income and deducts expenses. Purchase payouts affect

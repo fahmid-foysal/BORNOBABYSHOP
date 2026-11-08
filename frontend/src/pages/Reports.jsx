@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Download, ChartNoAxesCombined, RotateCcw } from "lucide-react";
-import { defaultDates, qs, downloadCsv, money, number } from "../api";
+import { defaultDates, qs, downloadCsv, downloadXlsx, downloadPdf, money, number } from "../api";
 import { useData, DateRange, Busy, ErrorBox, Empty } from "../components";
 const reports = [
   ["sales-explorer", "Sales explorer"],
@@ -161,16 +161,11 @@ export default function Reports() {
           <h1>Reports</h1>
           <p>A closer look at what sells, when, and with whom.</p>
         </div>
-        <button
-          className="btn"
-          disabled={!rows.length || loading}
-          onClick={() =>
-            downloadCsv(rows, `borno-${type}-${dates.from}-${dates.to}.csv`)
-          }
-        >
-          <Download size={16} />
-          Export CSV
-        </button>
+        <div className="row-actions wrap">
+          <button className="btn" disabled={!rows.length || loading} onClick={() => downloadCsv(rows, `borno-${type}-${dates.from}-${dates.to}.csv`)}><Download size={16} />CSV</button>
+          <button className="btn" disabled={!rows.length || loading} onClick={() => downloadXlsx(rows, `borno-${type}-${dates.from}-${dates.to}.xlsx`, "Sales report")}><Download size={16} />XLSX</button>
+          <button className="btn" disabled={!rows.length || loading} onClick={() => downloadPdf(rows, `borno-${type}-${dates.from}-${dates.to}.pdf`, reports.find((r) => r[0] === type)[1])}><Download size={16} />PDF</button>
+        </div>
       </div>
       <div className="reports-layout">
         <aside className="panel report-nav">

@@ -8,8 +8,9 @@ import {
   ImagePlus,
   X,
   ScanBarcode,
+  Download,
 } from "lucide-react";
-import { api, qs, money, number, asset } from "../api";
+import { api, qs, money, number, asset, downloadCsv } from "../api";
 import {
   useApp,
   useData,
@@ -132,6 +133,20 @@ export default function Catalog({ type }) {
       notify(e.message, "error");
     }
   }
+  async function downloadBarcodeMap() {
+    try {
+      const rows = [];
+      let nextPage = 1;
+      let pages = 1;
+      do {
+        const result = await api(`/catalog/products?${qs({ page: nextPage, limit: 100 })}`);
+        rows.push(...result.rows.map((row) => ({ product_name: row.name, barcode: row.barcode })));
+        pages = result.pages;
+        nextPage += 1;
+      } while (nextPage <= pages);
+      downloadCsv(rows, "borno-product-barcode-map.csv");
+    } catch (e) { notify(e.message, "error"); }
+  }
   return (
     <>
       <div className="page-heading">
@@ -147,10 +162,10 @@ export default function Catalog({ type }) {
               : "A home for every toy, from shelf to doorstep."}
           </p>
         </div>
-        <button className="btn primary" onClick={() => edit(null)}>
-          <Plus size={17} />
-          Create {combo ? "combo" : "product"}
-        </button>
+        <div className="row-actions wrap">
+          {!combo && <button className="btn" onClick={downloadBarcodeMap}><Download size={17} />Barcode map CSV</button>}
+          <button className="btn primary" onClick={() => edit(null)}><Plus size={17} />Create {combo ? "combo" : "product"}</button>
+        </div>
       </div>
       <section className="panel">
         <div className="toolbar">

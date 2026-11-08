@@ -15,7 +15,7 @@ import { bulkTemplates, parseSalesCsv } from "../csv";
 import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 export default function BulkSales() {
   const { notify, lookups } = useApp();
-  const [importMode, setImportMode] = useState("mode2");
+  const [importMode, setImportMode] = useState("mode1");
   const [orders, setOrders] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

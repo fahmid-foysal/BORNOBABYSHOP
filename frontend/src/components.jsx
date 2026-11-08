@@ -17,7 +17,7 @@ import {
   LoaderCircle,
   AlertCircle,
 } from "lucide-react";
-import { api, qs, money, number, asset } from "./api";
+import { api, qs, money, number, asset, today } from "./api";
 export const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
 export function useData(path, version = 0) {
@@ -271,27 +271,69 @@ export function Badge({ children }) {
   );
 }
 export function DateRange({ value, onChange }) {
+  const current = today();
+  const currentDate = new Date(`${current}T00:00:00Z`);
+  const format = (date) => date.toISOString().slice(0, 10);
+  const addDays = (date, days) => {
+    const next = new Date(date);
+    next.setUTCDate(next.getUTCDate() + days);
+    return next;
+  };
+  const mondayOffset = (currentDate.getUTCDay() + 6) % 7;
+  const thisWeekStart = addDays(currentDate, -mondayOffset);
+  const thisMonthStart = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 1));
+  const lastMonthStart = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
+  const lastMonthEnd = addDays(thisMonthStart, -1);
+  const thisYearStart = new Date(Date.UTC(currentDate.getUTCFullYear(), 0, 1));
+  const lastYearStart = new Date(Date.UTC(currentDate.getUTCFullYear() - 1, 0, 1));
+  const lastYearEnd = new Date(Date.UTC(currentDate.getUTCFullYear() - 1, 11, 31));
+  const presets = [
+    ["Last month", format(lastMonthStart), format(lastMonthEnd)],
+    ["This month", format(thisMonthStart), current],
+    ["Last week", format(addDays(thisWeekStart, -7)), format(addDays(thisWeekStart, -1))],
+    ["This week", format(thisWeekStart), current],
+    ["Last year", format(lastYearStart), format(lastYearEnd)],
+    ["This year", format(thisYearStart), current],
+  ];
   return (
-    <div className="date-range">
-      <input
-        type="date"
-        aria-label="From date"
-        value={value.from}
-        max={value.to}
-        onChange={(e) =>
-          e.target.value && onChange({ ...value, from: e.target.value })
-        }
-      />
-      <span>—</span>
-      <input
-        type="date"
-        aria-label="To date"
-        value={value.to}
-        min={value.from}
-        onChange={(e) =>
-          e.target.value && onChange({ ...value, to: e.target.value })
-        }
-      />
+    <div className="date-filter-control">
+      <div className="date-presets" aria-label="Date range presets">
+        {presets.map(([label, from, to]) => {
+          const selected = value.from === from && value.to === to;
+          return (
+            <button
+              type="button"
+              key={label}
+              className={selected ? "selected" : ""}
+              aria-pressed={selected}
+              onClick={() => onChange({ from, to })}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="date-range">
+        <input
+          type="date"
+          aria-label="From date"
+          value={value.from}
+          max={value.to}
+          onChange={(e) =>
+            e.target.value && onChange({ ...value, from: e.target.value })
+          }
+        />
+        <span>—</span>
+        <input
+          type="date"
+          aria-label="To date"
+          value={value.to}
+          min={value.from}
+          onChange={(e) =>
+            e.target.value && onChange({ ...value, to: e.target.value })
+          }
+        />
+      </div>
     </div>
   );
 }

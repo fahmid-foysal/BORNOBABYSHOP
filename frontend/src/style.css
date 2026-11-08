@@ -696,6 +696,47 @@ code {
   color: var(--muted);
   margin-top: 4px;
 }
+.date-filter-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+.date-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.date-presets button {
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.date-presets button:hover {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}
+.date-presets button.selected {
+  border-color: #086f73;
+  background: #086f73;
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(8, 111, 115, 0.24);
+}
+.date-presets button.selected:hover {
+  border-color: #065b5f;
+  background: #065b5f;
+  color: #fff;
+}
 .date-range {
   display: flex;
   align-items: center;
@@ -3108,6 +3149,23 @@ td small {
   }
   .date-range {
     gap: 4px;
+  }
+  .date-filter-control {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .date-presets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .date-presets button {
+    width: 100%;
+    padding-inline: 5px;
+  }
+  .date-range {
+    width: 100%;
+    justify-content: space-between;
   }
   .date-range input {
     font-size: 9px;

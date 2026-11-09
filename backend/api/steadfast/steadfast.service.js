@@ -143,30 +143,49 @@ exports.send = async (keys, bulk = false) => {
   return { results, response_status: response.status };
 };
 exports.reconcile = async (key, raw) => {
+  const optionalText = (max) =>
+    z.preprocess(
+      (value) => String(value ?? "").trim() || null,
+      z.string().max(max).nullable(),
+    );
   const b = z
     .object({
       consignment_id: id,
-      tracking_code: z.string().min(1).max(150),
-      tracking_link: z
-        .string()
-        .url()
-        .max(1024)
-        .refine((v) => new URL(v).protocol === "https:"),
+      tracking_code: optionalText(150),
+      tracking_link: optionalText(1024).refine(
+        (value) => !value || (z.string().url().safeParse(value).success && new URL(value).protocol === "https:"),
+        "Tracking link must be a valid HTTPS URL",
+      ),
     })
     .parse(raw);
+  const response = z
+    .object({
+      status: z.coerce.number().int(),
+      delivery_status: z.string().trim().min(1).max(100),
+    })
+    .passthrough()
+    .parse(
+      await request(`/status_by_cid/${encodeURIComponent(b.consignment_id)}`),
+    );
+  if (response.status !== 200)
+    throw new HttpError(502, "Steadfast did not return a successful status");
   return transaction(async (db) => {
-    const s = await one(
+    await one(
       db,
       "SELECT * FROM online_sales WHERE id=? FOR UPDATE",
       [id.parse(key)],
     );
-    if (s.sent_to_steadfast)
-      throw new HttpError(409, "Order is already linked to Steadfast");
-    await db.query(
-      "UPDATE online_sales SET sent_to_steadfast=1,steadfast_consignment_id=?,steadfast_tracking_code=?,steadfast_tracking_link=?,steadfast_last_error=NULL WHERE id=?",
-      [b.consignment_id, b.tracking_code, b.tracking_link, key],
+    const [duplicate] = await db.query(
+      "SELECT id FROM online_sales WHERE steadfast_consignment_id=? AND id<>? LIMIT 1 FOR UPDATE",
+      [b.consignment_id, key],
     );
-    return { linked: true };
+    if (duplicate.length)
+      throw new HttpError(409, "This consignment is already linked to another order");
+    await db.query(
+      "UPDATE online_sales SET sent_to_steadfast=1,steadfast_consignment_id=?,steadfast_tracking_code=?,steadfast_tracking_link=?,steadfast_status=?,steadfast_last_error=NULL WHERE id=?",
+      [b.consignment_id, b.tracking_code, b.tracking_link, response.delivery_status, key],
+    );
+    return { linked: true, delivery_status: response.delivery_status };
   });
 };
 exports.refreshStatus = async (key) => {

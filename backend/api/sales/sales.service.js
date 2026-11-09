@@ -34,6 +34,7 @@ const saleSchema = z.object({
   paid_amount: amount.default(0),
   payment_method_id: id.nullable().optional(),
   sales_employee_id: id.nullable().optional(),
+  orderer_num: z.string().trim().max(100).nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
   send_to_steadfast: z.boolean().default(true),
 });
@@ -108,6 +109,7 @@ async function createOne(db, c, b, user) {
   };
   if (c === "online")
     Object.assign(header, {
+      orderer_num: b.orderer_num || null,
       delivery_charge: b.delivery_charge,
       steadfast_cod_amount: round(value.payable - b.paid_amount),
       steadfast_note: b.notes || null,
@@ -258,9 +260,13 @@ exports.list = async (c, q) => {
   let where = " WHERE 1=1";
   let params = [];
   if (q.search) {
-    where +=
-      " AND (cu.cus_name LIKE ? OR cu.cus_phone LIKE ? OR CAST(s.id AS CHAR)=?)";
-    params.push(`%${q.search}%`, `%${q.search}%`, q.search);
+    if (c === "online") {
+      where += " AND (cu.cus_name LIKE ? OR cu.cus_phone LIKE ? OR CAST(s.id AS CHAR)=? OR s.orderer_num LIKE ? OR CAST(s.steadfast_consignment_id AS CHAR) LIKE ?)";
+      params.push(`%${q.search}%`, `%${q.search}%`, q.search, `%${q.search}%`, `%${q.search}%`);
+    } else {
+      where += " AND (cu.cus_name LIKE ? OR cu.cus_phone LIKE ? OR CAST(s.id AS CHAR)=?)";
+      params.push(`%${q.search}%`, `%${q.search}%`, q.search);
+    }
   }
   if (q.status) {
     where += " AND s.status=?";
@@ -352,6 +358,7 @@ exports.update = async (c, key, raw) => {
       final_discount: b.final_discount,
     };
     if (c === "online") Object.assign(header, {
+      orderer_num: b.orderer_num || null,
       delivery_charge: b.delivery_charge,
       steadfast_cod_amount: round(value.payable - Number(paymentRow.paid)),
       steadfast_note: b.notes || null,

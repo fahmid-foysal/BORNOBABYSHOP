@@ -12,8 +12,6 @@ import {
   Link2,
   RefreshCw,
   Copy,
-  StickyNote,
-  MapPin,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -38,17 +36,20 @@ import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 const returnKey = (item) => `${item.item_type}:${item.line_id}`;
 const roundMoney = (value) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-function HoverInfo({ label, icon: Icon, children }) {
+function ExpandableText({ label, text, limit = 70 }) {
+  const [expanded, setExpanded] = useState(false);
+  const value = String(text || "");
+  const shortened = value.length > limit;
   return (
-    <span className="hover-info">
-      <button type="button" className="info-trigger" aria-label={label}>
-        <Icon size={13} />
-        <span>{label}</span>
-      </button>
-      <span className="info-popover" role="tooltip">
-        {children}
-      </span>
-    </span>
+    <div className="expandable-text">
+      <span>{label}:</span>{" "}
+      {shortened && !expanded ? `${value.slice(0, limit).trim()}…` : value || "—"}
+      {shortened && (
+        <button type="button" onClick={() => setExpanded((current) => !current)}>
+          {expanded ? "See less" : "See more"}
+        </button>
+      )}
+    </div>
   );
 }
 function estimateReturn(row, selection) {
@@ -111,6 +112,11 @@ export default function SalesList() {
   const [returnRefund, setReturnRefund] = useState(null);
   const [editItems, setEditItems] = useState([]);
   const [editPicker, setEditPicker] = useState(false);
+  const [steadfastConnect, setSteadfastConnect] = useState({
+    consignment_id: "",
+    tracking_code: "",
+    tracking_link: "",
+  });
   const {
     data,
     loading,
@@ -201,7 +207,7 @@ export default function SalesList() {
       );
       setReturnRefund(null);
     }
-    if (mode === "edit")
+    if (mode === "edit") {
       setEditItems(
         row.items.map((item) => ({
           item_type: item.item_type,
@@ -212,6 +218,12 @@ export default function SalesList() {
           rate: Number(item.rate),
         })),
       );
+      setSteadfastConnect({
+        consignment_id: row.steadfast_consignment_id || "",
+        tracking_code: row.steadfast_tracking_code || "",
+        tracking_link: row.steadfast_tracking_link || "",
+      });
+    }
   }
   async function removeOrder(row) {
     if (!window.confirm(`Delete ${channel === "online" ? "ORD" : "POS"}-${row.id}? This cannot be undone.`)) return;
@@ -239,6 +251,7 @@ export default function SalesList() {
           paid_amount: 0,
           payment_method_id: null,
           sales_employee_id: fields.sales_employee_id ? Number(fields.sales_employee_id) : null,
+          orderer_num: channel === "online" ? fields.orderer_num?.trim() || null : null,
           notes: fields.notes || null,
           send_to_steadfast: false,
         },
@@ -248,12 +261,55 @@ export default function SalesList() {
       notify("Order details and items updated");
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
+  async function connectSteadfast() {
+    setError("");
+    try {
+      if (!steadfastConnect.consignment_id)
+        throw new Error("Consignment ID is required");
+      const existingConsignment = dialog.row.steadfast_consignment_id;
+      if (
+        existingConsignment &&
+        String(existingConsignment) !== String(steadfastConnect.consignment_id) &&
+        !window.confirm(
+          `Are you sure you want to change the Steadfast consignment ID from ${existingConsignment} to ${steadfastConnect.consignment_id}?`,
+        )
+      )
+        return;
+      setBusy(true);
+      const result = await api(`/sales/online/${dialog.row.id}/reconcile-steadfast`, {
+        method: "POST",
+        body: steadfastConnect,
+      });
+      setDialog((current) => ({
+        ...current,
+        row: {
+          ...current.row,
+          sent_to_steadfast: 1,
+          steadfast_consignment_id: steadfastConnect.consignment_id,
+          steadfast_tracking_code: steadfastConnect.tracking_code || null,
+          steadfast_tracking_link: steadfastConnect.tracking_link || null,
+          steadfast_status: result.delivery_status,
+        },
+      }));
+      setVersion((value) => value + 1);
+      notify(`Steadfast connected · ${result.delivery_status.replaceAll("_", " ")}`);
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
   async function submit(e) {
     e.preventDefault();
-    setBusy(true);
     setError("");
     try {
       const fields = new FormData(e.target);
+      if (
+        dialog.mode === "reconcile" &&
+        dialog.row.steadfast_consignment_id &&
+        String(dialog.row.steadfast_consignment_id) !== String(fields.get("consignment_id")) &&
+        !window.confirm(
+          `Are you sure you want to change the Steadfast consignment ID from ${dialog.row.steadfast_consignment_id} to ${fields.get("consignment_id")}?`,
+        )
+      )
+        return;
+      setBusy(true);
       const body =
         dialog.mode === "return"
           ? {
@@ -342,7 +398,7 @@ export default function SalesList() {
               setSearch(v);
               setPage(1);
             }}
-            placeholder="Find a customer, phone number or order ID…"
+            placeholder={channel === "online" ? "Customer, phone, order, orderer or consignment ID…" : "Find a customer, phone number or order ID…"}
           />
           <select
             aria-label="Filter sale status"
@@ -448,16 +504,13 @@ export default function SalesList() {
                         {channel === "online" ? "ORD" : "POS"}-{row.id}
                       </strong>
                       <small>{row.created_at}</small>
-                      <HoverInfo label="Notes" icon={StickyNote}>
-                        {row.notes || "No notes for this order"}
-                      </HoverInfo>
+                      {channel === "online" && row.orderer_num && <small>Orderer: {row.orderer_num}</small>}
+                      <ExpandableText label="Notes" text={row.notes || "No notes"} limit={60} />
                     </td>
                     <td>
                       <div className="customer-name">{row.cus_name}</div>
                       <small>{row.cus_phone}</small>
-                      <HoverInfo label="Address" icon={MapPin}>
-                        {row.cus_address || "No address provided"}
-                      </HoverInfo>
+                      <ExpandableText label="Address" text={row.cus_address || "No address provided"} limit={70} />
                     </td>
                     <td>
                       <div className="sale-item-list">
@@ -692,12 +745,13 @@ export default function SalesList() {
               <div className="modal-body">
                 <ErrorBox message={error} />
                 {channel === "online" && dialog.row.sent_to_steadfast && (
-                  <div className="info-note">This order is linked to Steadfast. The edit changes the ERP record only; it does not modify the courier booking.</div>
+                  <div className="info-note">This order is linked to Steadfast. Customer and item edits do not modify the courier booking; use the connection section below to reconnect its consignment.</div>
                 )}
                 <div className="form-grid">
                   <Field label="Customer name" name="cus_name" defaultValue={dialog.row.cus_name} required />
                   <Field label="Phone" name="cus_phone" defaultValue={dialog.row.cus_phone} required />
                   <Field label="Address" name="cus_address" defaultValue={dialog.row.cus_address} required={channel === "online"} />
+                  {channel === "online" && <Field label="Orderer number (optional)" name="orderer_num" maxLength={100} defaultValue={dialog.row.orderer_num || ""} />}
                   <Field label="Sales person">
                     <select name="sales_employee_id" defaultValue={dialog.row.sales_employee_id || ""}>
                       <option value="">Unassigned</option>
@@ -713,6 +767,43 @@ export default function SalesList() {
                   <button type="button" className="btn" onClick={() => setEditPicker(true)}><Plus size={15} />Add items</button>
                 </div>
                 <ItemTable items={editItems} onChange={setEditItems} />
+                {channel === "online" && (
+                  <section className="steadfast-connect-section">
+                    <div className="section-heading">
+                      <div>
+                        <h3>Connect Steadfast consignment</h3>
+                        <small>The consignment ID is verified with Steadfast and its current delivery status is saved.</small>
+                      </div>
+                      {dialog.row.steadfast_status && <Badge>{dialog.row.steadfast_status}</Badge>}
+                    </div>
+                    <div className="form-grid">
+                      <Field
+                        label="Consignment ID"
+                        type="number"
+                        min="1"
+                        value={steadfastConnect.consignment_id}
+                        onChange={(event) => setSteadfastConnect({ ...steadfastConnect, consignment_id: event.target.value })}
+                      />
+                      <Field
+                        label="Steadfast tracking code (optional)"
+                        maxLength={150}
+                        value={steadfastConnect.tracking_code}
+                        onChange={(event) => setSteadfastConnect({ ...steadfastConnect, tracking_code: event.target.value })}
+                      />
+                      <Field
+                        label="Steadfast tracking link (optional)"
+                        type="url"
+                        placeholder="https://…"
+                        value={steadfastConnect.tracking_link}
+                        onChange={(event) => setSteadfastConnect({ ...steadfastConnect, tracking_link: event.target.value })}
+                      />
+                    </div>
+                    <button type="button" className="btn" disabled={busy || !steadfastConnect.consignment_id} onClick={connectSteadfast}>
+                      <Link2 size={15} />
+                      {dialog.row.steadfast_consignment_id ? "Reconnect consignment" : "Connect consignment"}
+                    </button>
+                  </section>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn" onClick={() => setDialog(null)} disabled={busy}>Cancel</button>
@@ -809,19 +900,20 @@ export default function SalesList() {
                       type="number"
                       min="1"
                       name="consignment_id"
+                      defaultValue={dialog.row.steadfast_consignment_id || ""}
                       required
                     />
                     <Field
                       label="Tracking code"
                       name="tracking_code"
-                      required
+                      defaultValue={dialog.row.steadfast_tracking_code || ""}
                     />
                     <Field
                       label="Tracking link (HTTPS)"
                       type="url"
                       pattern="https://.*"
                       name="tracking_link"
-                      required
+                      defaultValue={dialog.row.steadfast_tracking_link || ""}
                     />
                   </>
                 ) : dialog.mode === "return" ? (

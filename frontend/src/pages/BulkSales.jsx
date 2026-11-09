@@ -187,7 +187,7 @@ export default function BulkSales() {
             <strong>A few details before you import</strong>
             <p>
               Keep phone numbers as text to preserve the leading zero.
-              In Mode 1, customer details, total_paid, cod_amount and notes may
+              In Mode 1, customer details, orderer_num, total_paid, cod_amount and notes may
               be entered on only one row per order; product_name is optional and
               informational only. Item rows beneath may leave those fields blank. In Mode 2,
               order-level fields must match across rows with the same order_ref.
@@ -231,6 +231,7 @@ export default function BulkSales() {
                     <tr key={o.order_ref}>
                       <td>
                         <strong>{o.order_ref}</strong>
+                        {o.orderer_num && <small>Orderer: {o.orderer_num}</small>}
                       </td>
                       <td>
                         {o.customer.cus_name}

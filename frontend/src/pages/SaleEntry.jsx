@@ -36,6 +36,7 @@ export default function SaleEntry({ channel }) {
   });
   const [employee, setEmployee] = useState("");
   const [notes, setNotes] = useState("");
+  const [ordererNum, setOrdererNum] = useState("");
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState("amount");
   const [picker, setPicker] = useState(false);
@@ -172,6 +173,7 @@ export default function SaleEntry({ channel }) {
           paid_amount: Number(paid),
           payment_method_id: method ? Number(method) : null,
           sales_employee_id: employee ? Number(employee) : null,
+          orderer_num: online ? ordererNum.trim() || null : null,
           notes,
           send_to_steadfast: send,
         },
@@ -205,6 +207,7 @@ export default function SaleEntry({ channel }) {
     setCashTendered(0);
     setPaid(0);
     setNotes("");
+    setOrdererNum("");
     setError("");
   }
   return (
@@ -320,6 +323,15 @@ export default function SaleEntry({ channel }) {
                 }
                 placeholder="Full name"
               />
+              {online && (
+                <Field
+                  label="Orderer number (optional)"
+                  value={ordererNum}
+                  maxLength={100}
+                  onChange={(e) => setOrdererNum(e.target.value)}
+                  placeholder="External order/customer reference"
+                />
+              )}
               <Field label={`Address${online ? "" : " (optional)"}`}>
                 <textarea
                   required={online}

@@ -139,12 +139,21 @@ export default function Catalog({ type }) {
       let nextPage = 1;
       let pages = 1;
       do {
-        const result = await api(`/catalog/products?${qs({ page: nextPage, limit: 100 })}`);
-        rows.push(...result.rows.map((row) => ({ product_name: row.name, barcode: row.barcode })));
+        const result = await api(`/catalog/${type}?${qs({ page: nextPage, limit: 100 })}`);
+        rows.push(
+          ...result.rows.map((row) =>
+            combo
+              ? { combo_name: row.name, barcode: row.barcode }
+              : { product_name: row.name, barcode: row.barcode },
+          ),
+        );
         pages = result.pages;
         nextPage += 1;
       } while (nextPage <= pages);
-      downloadCsv(rows, "borno-product-barcode-map.csv");
+      downloadCsv(
+        rows,
+        `borno-${combo ? "combo" : "product"}-barcode-map.csv`,
+      );
     } catch (e) { notify(e.message, "error"); }
   }
   return (
@@ -163,7 +172,7 @@ export default function Catalog({ type }) {
           </p>
         </div>
         <div className="row-actions wrap">
-          {!combo && <button className="btn" onClick={downloadBarcodeMap}><Download size={17} />Barcode map CSV</button>}
+          <button className="btn" onClick={downloadBarcodeMap}><Download size={17} />Barcode map CSV</button>
           <button className="btn primary" onClick={() => edit(null)}><Plus size={17} />Create {combo ? "combo" : "product"}</button>
         </div>
       </div>

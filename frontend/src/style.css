@@ -737,6 +737,35 @@ code {
   background: #065b5f;
   color: #fff;
 }
+.expandable-text {
+  max-width: 250px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.expandable-text > span {
+  color: var(--text);
+  font-weight: 700;
+}
+.expandable-text button {
+  margin-left: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #086f73;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.steadfast-connect-section {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
 .date-range {
   display: flex;
   align-items: center;

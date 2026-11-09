@@ -17,6 +17,7 @@ const modeHeaders = {
     "customer_name",
     "customer_phone",
     "customer_address",
+    "orderer_num",
     "total_paid",
     "cod_amount",
     "item_type",
@@ -29,6 +30,7 @@ const modeHeaders = {
   ],
   mode2: [
     ...commonValueFields,
+    "orderer_num",
     "rate",
     "discount",
     "delivery_charge",
@@ -46,6 +48,7 @@ export const bulkTemplates = {
       customer_name: "",
       customer_phone: "",
       customer_address: "",
+      orderer_num: "",
       total_paid: "",
       cod_amount: "",
       item_type: "product",
@@ -61,6 +64,7 @@ export const bulkTemplates = {
       customer_name: "Jahid Hasan",
       customer_phone: "01712345678",
       customer_address: "Dhanmondi, Dhaka",
+      orderer_num: "WEB-CUSTOMER-1001",
       total_paid: 0,
       cod_amount: 1000,
       item_type: "combo",
@@ -78,6 +82,7 @@ export const bulkTemplates = {
     customer_name: "Jahid Hasan",
     customer_phone: "01712345678",
     customer_address: "Dhanmondi, Dhaka",
+    orderer_num: "WEB-CUSTOMER-1001",
     item_type: "product",
     barcode: "A1B2C",
     quantity: 2,
@@ -94,6 +99,7 @@ export const bulkTemplates = {
     customer_name: "Jahid Hasan",
     customer_phone: "01712345678",
     customer_address: "Dhanmondi, Dhaka",
+    orderer_num: "WEB-CUSTOMER-1001",
     item_type: "combo",
     barcode: "D3E4F",
     quantity: 1,
@@ -240,9 +246,13 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
   const text = await file.text();
   const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim() });
   if (parsed.errors.length) throw new Error(parsed.errors[0].message);
-  const requiredHeaders = mode === "mode1"
-    ? expectedHeaders.filter((field) => !["notes", "product_name"].includes(field))
-    : expectedHeaders;
+  const optionalHeaders = new Set([
+    "orderer_num",
+    ...(mode === "mode1" ? ["notes", "product_name"] : []),
+  ]);
+  const requiredHeaders = expectedHeaders.filter(
+    (field) => !optionalHeaders.has(field),
+  );
   for (const field of requiredHeaders) {
     if (!parsed.meta.fields?.includes(field)) throw new Error(`Missing column: ${field}`);
   }
@@ -302,6 +312,7 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
       customer_name: String(row.customer_name).trim(),
       customer_phone: String(row.customer_phone).trim(),
       customer_address: String(row.customer_address).trim(),
+      orderer_num: String(row.orderer_num ?? "").trim(),
       payment_method_id: paymentMethodId,
       sales_employee_id: salesEmployeeId,
     };
@@ -327,6 +338,7 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
         "customer_name",
         "customer_phone",
         "customer_address",
+        "orderer_num",
         "total_paid",
         "cod_amount",
         "notes",
@@ -406,6 +418,7 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
       },
       payment_method_id: group.header.payment_method_id,
       sales_employee_id: group.header.sales_employee_id,
+      orderer_num: group.header.orderer_num || null,
       notes: group.header.notes,
       items: group.items,
       final_discount: finalDiscount,

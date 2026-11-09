@@ -260,14 +260,21 @@ async function salesExplorer(q) {
         baseParams(),
       ),
       query(
-        `SELECT COALESCE(c.category_name,'Uncategorized') category,COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,SUM(l.quantity*slc.component_quantity) component_quantity,SUM(l.quantity*slc.component_quantity*COALESCE(sc.cost_rate,0)) sold_cost
+        `SELECT COALESCE(c.category_name,'Uncategorized') category,COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,SUM(l.quantity*ac.component_quantity) component_quantity,SUM(l.quantity*ac.unit_cost) sold_cost
          FROM all_sales s JOIN customers cu ON cu.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id
          JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
-         JOIN sale_line_components slc ON BINARY slc.channel=BINARY l.channel AND slc.sale_id=l.sale_id AND BINARY slc.item_type=BINARY l.item_type AND slc.sale_line_id=l.line_id
-         JOIN products p ON p.id=slc.product_id LEFT JOIN categories c ON c.id=p.category_id
-         LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY s.channel AND sc.sale_id=s.id AND sc.product_id=slc.product_id
-         WHERE ${where}${categoryId ? " AND p.category_id=?" : ""}
-         GROUP BY p.category_id,c.category_name ORDER BY component_quantity DESC`,
+         JOIN (
+           SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
+             SUM(slc.component_quantity) component_quantity,
+             SUM(slc.component_quantity*COALESCE(sc.cost_rate,0)) unit_cost
+           FROM sale_line_components slc
+           JOIN products p ON p.id=slc.product_id
+           LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY slc.channel AND sc.sale_id=slc.sale_id AND sc.product_id=slc.product_id
+           GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
+         ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
+         LEFT JOIN categories c ON c.id=ac.category_id
+         WHERE ${where}${categoryId ? " AND ac.category_id=?" : ""}
+         GROUP BY ac.category_id,c.category_name ORDER BY component_quantity DESC`,
         categoryId ? [...params, categoryId] : baseParams(),
       ),
       Promise.all([

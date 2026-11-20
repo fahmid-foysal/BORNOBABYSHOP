@@ -36,12 +36,12 @@ import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 const returnKey = (item) => `${item.item_type}:${item.line_id}`;
 const roundMoney = (value) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-function ExpandableText({ label, text, limit = 70 }) {
+function ExpandableText({ label, text, limit = 70, highlight = false }) {
   const [expanded, setExpanded] = useState(false);
   const value = String(text || "");
   const shortened = value.length > limit;
   return (
-    <div className="expandable-text">
+    <div className={`expandable-text${highlight ? " exchange-highlight" : ""}`}>
       <span>{label}:</span>{" "}
       {shortened && !expanded ? `${value.slice(0, limit).trim()}…` : value || "—"}
       {shortened && (
@@ -108,6 +108,7 @@ export default function SalesList() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshingId, setRefreshingId] = useState(null);
+  const [steadfastOverrides, setSteadfastOverrides] = useState({});
   const [returnSelection, setReturnSelection] = useState({});
   const [returnRefund, setReturnRefund] = useState(null);
   const [editItems, setEditItems] = useState([]);
@@ -148,7 +149,13 @@ export default function SalesList() {
       notify(
         `Steadfast status: ${result.delivery_status.replaceAll("_", " ")}`,
       );
-      setVersion((v) => v + 1);
+      setSteadfastOverrides((current) => ({
+        ...current,
+        [row.id]: {
+          ...current[row.id],
+          steadfast_status: result.delivery_status,
+        },
+      }));
     } catch (e) {
       notify(e.message, "error");
     } finally {
@@ -345,7 +352,10 @@ export default function SalesList() {
       setBusy(false);
     }
   }
-  const pageRows = data?.rows || [];
+  const pageRows = (data?.rows || []).map((row) => ({
+    ...row,
+    ...(channel === "online" ? steadfastOverrides[row.id] : null),
+  }));
   const selectedOrders = Object.values(selectedRows);
   const selectedOnPage = pageRows.filter((row) => selectedRows[row.id]).length;
   const allOnPageSelected =
@@ -376,6 +386,7 @@ export default function SalesList() {
                 setPage(1);
                 setSteadfastStatus("");
                 setSelectedRows({});
+                setSteadfastOverrides({});
               }}
             >
               {c === "offline" ? "In-store sales" : "Online sales"}
@@ -485,7 +496,7 @@ export default function SalesList() {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row) => (
+                {pageRows.map((row) => (
                   <tr key={row.id}>
                     {channel === "online" && (
                       <td className="select-column">
@@ -505,7 +516,12 @@ export default function SalesList() {
                       </strong>
                       <small>{row.created_at}</small>
                       {channel === "online" && row.orderer_num && <small>Orderer: {row.orderer_num}</small>}
-                      <ExpandableText label="Notes" text={row.notes || "No notes"} limit={60} />
+                      <ExpandableText
+                        label="Notes"
+                        text={row.notes || "No notes"}
+                        limit={60}
+                        highlight={channel === "online" && /exchange/i.test(row.notes || "")}
+                      />
                     </td>
                     <td>
                       <div className="customer-name">{row.cus_name}</div>
@@ -599,6 +615,7 @@ export default function SalesList() {
                                 </button>
                               </div>
                               <button
+                                type="button"
                                 className="btn small-btn courier-refresh"
                                 disabled={refreshingId === row.id}
                                 onClick={() => refreshSteadfast(row)}

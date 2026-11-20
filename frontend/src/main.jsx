@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   PanelLeftClose,
   PanelLeftOpen,
+  Megaphone,
 } from "lucide-react";
 import { api, today } from "./api";
 import { AppContext, ErrorBox, Busy, moduleLabels, useApp } from "./components";
@@ -81,6 +82,7 @@ const groups = [
       ["Steadfast payments", "/steadfast", Truck, "STEADFAST_PAYMENTS"],
       ["Income", "/income", ArrowDownLeft, "INCOME"],
       ["Expenses", "/expenses", ArrowUpRight, "EXPENSE"],
+      ["Marketing expenses", "/marketing-expenses", Megaphone, "MARKETING_EXPENSES"],
       ["Reports", "/reports", ChartNoAxesCombined, "REPORTS"],
     ],
   },
@@ -564,6 +566,14 @@ function Shell() {
                 element={
                   <Protected module="EXPENSE">
                     <Records key="expenses" resource="expenses" />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/marketing-expenses"
+                element={
+                  <Protected module="MARKETING_EXPENSES">
+                    <Records key="marketing-expenses" resource="marketing_expenses" />
                   </Protected>
                 }
               />

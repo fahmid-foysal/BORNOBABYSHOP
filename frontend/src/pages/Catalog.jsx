@@ -9,7 +9,9 @@ import {
   X,
   ScanBarcode,
   Download,
+  Printer,
 } from "lucide-react";
+import { BarcodePrintSheet, printBarcodeSheet } from "../barcode-print";
 import { api, qs, money, number, asset, downloadCsv } from "../api";
 import {
   useApp,
@@ -43,6 +45,7 @@ export default function Catalog({ type }) {
   const [picker, setPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [barcodePrint, setBarcodePrint] = useState(null);
   const endpoint = `/catalog/${type}`;
   const {
     data,
@@ -281,6 +284,16 @@ export default function Catalog({ type }) {
                     )}
                     <td>
                       <div className="row-actions">
+                        {!combo && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Print product barcode"
+                            onClick={() => setBarcodePrint({ product: row, copies: 1 })}
+                          >
+                            <Printer size={16} />
+                          </button>
+                        )}
                         <button
                           className="icon-btn"
                           title="View details"
@@ -542,6 +555,55 @@ export default function Catalog({ type }) {
           </form>
         </Modal>
       )}
+      {barcodePrint && (
+        <Modal
+          title={`Print barcode · ${barcodePrint.product.name}`}
+          onClose={() => setBarcodePrint(null)}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const copies = Math.max(1, Math.min(500, Number(barcodePrint.copies) || 1));
+              setBarcodePrint((current) => ({ ...current, copies }));
+              setTimeout(printBarcodeSheet, 0);
+            }}
+          >
+            <div className="modal-body">
+              <div className="barcode-print-preview">
+                <ScanBarcode size={30} />
+                <div>
+                  <strong>{barcodePrint.product.name}</strong>
+                  <code>{barcodePrint.product.barcode}</code>
+                </div>
+              </div>
+              <Field
+                label="Number of copies"
+                type="number"
+                min="1"
+                max="500"
+                step="1"
+                required
+                value={barcodePrint.copies}
+                onChange={(event) =>
+                  setBarcodePrint((current) => ({
+                    ...current,
+                    copies: event.target.value,
+                  }))
+                }
+                hint="Each barcode prints on a separate 2 × 1 inch label."
+              />
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={() => setBarcodePrint(null)}>Cancel</button>
+              <button className="btn primary"><Printer size={16} />Print barcodes</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      <BarcodePrintSheet
+        product={barcodePrint?.product}
+        copies={Number(barcodePrint?.copies) || 0}
+      />
       {picker && (
         <ItemPicker
           productsOnly

@@ -759,6 +759,43 @@ code {
   font-weight: 800;
   cursor: pointer;
 }
+.expandable-text.exchange-highlight {
+  padding: 5px 7px;
+  border: 1px solid #e5a52e;
+  border-radius: 6px;
+  background: #fff3cd;
+  color: #744c00;
+  box-shadow: 0 1px 4px rgba(160, 103, 0, 0.14);
+}
+.expandable-text.exchange-highlight > span {
+  color: #8a5200;
+}
+.report-sort-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.report-sort-button span {
+  color: #086f73;
+  font-size: 9px;
+}
+.report-total-row td {
+  border-top: 2px solid var(--border-strong, var(--border));
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 800;
+  white-space: nowrap;
+}
 .steadfast-connect-section {
   margin-top: 20px;
   padding: 16px;
@@ -2589,6 +2626,9 @@ td small {
 .sticker-print-sheet {
   display: none;
 }
+.barcode-print-sheet {
+  display: none;
+}
 .reports-layout {
   display: grid;
   grid-template-columns: 235px minmax(0, 1fr);
@@ -3092,7 +3132,105 @@ td small {
     height: 100px;
   }
 }
+.marketing-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(190px, 1fr)) auto;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.multi-filter {
+  position: relative;
+  min-width: 0;
+}
+.multi-filter > summary {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+.multi-filter > summary::-webkit-details-marker { display: none; }
+.multi-filter > summary span { font-size: 12px; font-weight: 700; }
+.multi-filter > summary strong { color: var(--accent-text); font-size: 11px; }
+.multi-filter-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  left: 0;
+  width: min(330px, 85vw);
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.multi-filter-popover > input { width: 100%; margin-bottom: 8px; }
+.multi-filter-actions { display: flex; gap: 12px; padding: 0 2px 8px; }
+.multi-filter-actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.multi-filter-options {
+  display: grid;
+  gap: 3px;
+  max-height: 260px;
+  overflow: auto;
+}
+.multi-filter-options label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 7px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.multi-filter-options label:hover { background: var(--surface-soft); }
+.multi-filter-options input { margin-top: 2px; }
+.multi-filter-options span { color: var(--text); font-size: 12px; overflow-wrap: anywhere; }
+.marketing-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 16px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  font-size: 12px;
+}
+.marketing-status-summary span { color: var(--muted); }
+.barcode-print-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.barcode-print-preview div { display: grid; gap: 3px; min-width: 0; }
+
+@media (max-width: 1000px) {
+  .marketing-filter-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+}
 @media (max-width: 760px) {
+  .marketing-filter-grid { grid-template-columns: 1fr; }
   .dashboard-charts > .panel:nth-child(2):has(.donut-chart) {
     display: block;
   }
@@ -4361,8 +4499,8 @@ td small {
   body.printing-stickers .main-shell,
   body.printing-stickers .page {
     width: 2in !important;
-    min-width: 3in !important;
-    max-width: 3in !important;
+    min-width: 2in !important;
+    max-width: 2in !important;
     margin: 0 !important;
     padding: 0 !important;
   }
@@ -4374,7 +4512,7 @@ td small {
     display: block !important;
     position: absolute !important;
     inset: 0 auto auto 0 !important;
-    width: 3in !important;
+    width: 2in !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
@@ -4385,7 +4523,8 @@ td small {
     width: 2in !important;
     height: 3in !important;
     margin: 0 !important;
-    padding: 0.12in !important;
+    box-sizing: border-box !important;
+    padding: 0.045in !important;
     overflow: hidden !important;
     break-after: page;
     page-break-after: always;
@@ -4393,32 +4532,56 @@ td small {
     color: #000 !important;
     border: 0 !important;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 8pt;
-    line-height: 1.15;
+    font-size: 7.5pt;
+    line-height: 1.12;
   }
   body.printing-stickers .delivery-sticker:last-child {
     break-after: auto;
     page-break-after: auto;
   }
-  body.printing-stickers .delivery-sticker header {
+  body.printing-stickers .delivery-sticker .sticker-brand {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
-    padding-bottom: 0.06in;
-    margin-bottom: 0.05in;
-    border-bottom: 1.5px solid #000;
-    font-size: 8.5pt;
+    gap: 0.04in;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 8.3pt;
+    white-space: nowrap;
   }
-  body.printing-stickers .delivery-sticker header b {
-    font-size: 7.5pt;
+  body.printing-stickers .delivery-sticker .sticker-brand b {
+    font-size: 7pt;
+    white-space: nowrap;
+  }
+  body.printing-stickers .sticker-rule {
+    width: 100%;
+    margin: 0.045in 0;
+    border-top: 1.5px dashed #000;
+  }
+  body.printing-stickers .sticker-sf-id {
+    display: flex;
+    flex-direction: column;
+    gap: 0.02in;
+    min-width: 0;
+  }
+  body.printing-stickers .sticker-sf-id span {
+    font-size: 10pt;
+    font-weight: 700;
+  }
+  body.printing-stickers .sticker-sf-id strong {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 12.5pt;
+    line-height: 1;
     white-space: nowrap;
   }
   body.printing-stickers .sticker-row {
     display: grid;
-    grid-template-columns: 0.48in minmax(0, 1fr);
-    gap: 0.04in;
-    margin-bottom: 0.04in;
+    grid-template-columns: 0.43in minmax(0, 1fr);
+    gap: 0.025in;
+    margin-bottom: 0.025in;
   }
   body.printing-stickers .sticker-row > span,
   body.printing-stickers .delivery-sticker footer > span {
@@ -4433,31 +4596,104 @@ td small {
     display: -webkit-box;
     overflow: hidden;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
   }
   body.printing-stickers .sticker-note {
-    font-size: 7.5pt;
+    font-size: 7pt;
   }
   body.printing-stickers .sticker-items {
     display: grid;
-    grid-template-columns: 0.36in minmax(0, 1fr);
-    gap: 0.04in;
-    margin: 0.02in 0 0.04in;
+    grid-template-columns: 0.4in minmax(0, 1fr);
+    gap: 0.025in;
+    margin: 0.025in 0 0.035in;
     padding-top: 0.04in;
-    border-top: 1px solid #000;
-    font-size: 7.5pt;
+    border-top: 1.5px dashed #000;
+    font-size: 7pt;
   }
   body.printing-stickers .sticker-items > span { font-weight: 700; }
   body.printing-stickers .sticker-items ul { margin: 0; padding: 0; list-style: none; }
-  body.printing-stickers .sticker-items li { margin: 0 0 0.025in; overflow-wrap: anywhere; }
+  body.printing-stickers .sticker-items li {
+    margin: 0 0 0.015in;
+    overflow-wrap: anywhere;
+    font-size: 7.6pt;
+    font-weight: 700;
+    line-height: 1.1;
+  }
   body.printing-stickers .delivery-sticker footer {
     display: flex;
     align-items: baseline;
-    justify-content: flex-end;
-    gap: 0.08in;
+    justify-content: space-between;
+    gap: 0.05in;
     margin-top: auto;
     padding-top: 0.05in;
-    border-top: 1.5px solid #000;
-    font-size: 12pt;
+    border-top: 1.5px dashed #000;
+    font-size: 10.5pt;
+  }
+  body.printing-barcodes,
+  body.printing-barcodes #root,
+  body.printing-barcodes .app-shell,
+  body.printing-barcodes .main-shell,
+  body.printing-barcodes .page {
+    width: 2in !important;
+    min-width: 2in !important;
+    max-width: 2in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.printing-barcodes .barcode-print-sheet,
+  body.printing-barcodes .barcode-print-sheet * {
+    visibility: visible !important;
+  }
+  body.printing-barcodes .barcode-print-sheet {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 2in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  body.printing-barcodes .barcode-label {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box !important;
+    width: 2in !important;
+    height: 1in !important;
+    margin: 0 !important;
+    padding: 0.045in 0.08in !important;
+    overflow: hidden !important;
+    break-after: page;
+    page-break-after: always;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  body.printing-barcodes .barcode-label:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  body.printing-barcodes .barcode-label > strong {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    font-size: 7pt;
+    line-height: 1.1;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.printing-barcodes .barcode-svg {
+    display: block;
+    width: 1.72in;
+    height: 0.5in;
+    margin: 0.025in 0 0.015in;
+    fill: #000;
+  }
+  body.printing-barcodes .barcode-label > b {
+    font-size: 8pt;
+    line-height: 1;
+    letter-spacing: 0.06em;
   }
 }

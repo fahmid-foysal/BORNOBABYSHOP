@@ -45,6 +45,20 @@ const configs = {
       expense_date: z.string().date(),
     }),
   },
+  marketing_expenses: {
+    module: "MARKETING_EXPENSES",
+    schema: z.object({
+      barcode: z.string().trim().min(1).max(100),
+      sales_person_id: id,
+      amount_usd: amount,
+      conversion_rate: z.coerce
+        .number()
+        .finite()
+        .positive()
+        .max(999999999)
+        .multipleOf(0.0001),
+    }),
+  },
   incomes: {
     module: "INCOME",
     schema: z.object({
@@ -86,6 +100,7 @@ exports.list = async (resource, q) => {
       "name",
       "narration",
       "reason",
+      "barcode",
     ].includes(k),
   );
   const params = [resource];
@@ -110,6 +125,15 @@ exports.list = async (resource, q) => {
         [r.product_id],
       );
       Object.assign(r, ps[0]);
+    }
+  if (resource === "marketing_expenses")
+    for (const r of rows) {
+      const [details] = await pool.query(
+        "SELECT p.product_name,e.name sales_person_name FROM products p JOIN employees e ON e.id=? WHERE p.barcode=?",
+        [r.sales_person_id, r.barcode],
+      );
+      Object.assign(r, details[0]);
+      r.amount_bdt = Number(r.amount_usd) * Number(r.conversion_rate);
     }
   return pageResult(rows, count[0].total, p);
 };
@@ -168,7 +192,15 @@ exports.save = async (resource, raw, key, user) => {
         parent = row.parent_category_id;
       }
     }
-    if (["expenses", "incomes", "stock_adjustments"].includes(resource) && !key)
+    if (resource === "marketing_expenses") {
+      await one(db, "SELECT id FROM products WHERE barcode=? FOR UPDATE", [
+        b.barcode,
+      ]);
+      await one(db, "SELECT id FROM employees WHERE id=? FOR UPDATE", [
+        b.sales_person_id,
+      ]);
+    }
+    if (["expenses", "incomes", "stock_adjustments", "marketing_expenses"].includes(resource) && !key)
       b.created_by = user.id;
     if (key) {
       await db.query("UPDATE ?? SET ? WHERE id=?", [resource, b, key]);
@@ -207,7 +239,7 @@ exports.lookups = async (user) => {
     ],
     suppliers: ["PRODUCTS", "PURCHASES"],
     payment_methods: ["SALES", "PURCHASES", "STEADFAST_PAYMENTS"],
-    employees: ["SALES", "REPORTS"],
+    employees: ["SALES", "REPORTS", "MARKETING_EXPENSES"],
     expense_accounts: ["EXPENSE"],
     income_accounts: ["INCOME"],
   };
@@ -216,5 +248,11 @@ exports.lookups = async (user) => {
       const [rows] = await pool.query("SELECT * FROM ?? ORDER BY id", [table]);
       output[table] = rows;
     }
+  if (access("MARKETING_EXPENSES")) {
+    const [rows] = await pool.query(
+      "SELECT config_name,amount FROM configs ORDER BY config_name",
+    );
+    output.configs = rows;
+  }
   return output;
 };

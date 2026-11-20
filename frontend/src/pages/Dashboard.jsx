@@ -10,6 +10,7 @@ import {
   Plus,
   CalendarDays,
   TrendingUp,
+  Megaphone,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -135,6 +136,13 @@ export default function Dashboard() {
                   detail: "Available quantity × current purchase price",
                   icon: Package,
                   color: "teal",
+                },
+                {
+                  label: "Marketing expense",
+                  value: money(d.marketing_expenses),
+                  detail: "USD spend converted using each saved rate",
+                  icon: Megaphone,
+                  color: "orange",
                 },
               ].map((s) => (
                 <article className="stat-card" key={s.label}>
@@ -516,7 +524,8 @@ export default function Dashboard() {
             </section>
             <p className="calculation-note">
               <strong>Net operating profit formula:</strong> product subtotal +
-              delivery charge − discount + other income − expenses − sold
+              delivery charge − discount + other income − expenses − marketing
+              expenses − sold
               purchase cost. Negative discounts therefore increase sales value.
               {" "}
               Cash profit uses receipt and payout creation dates. Gross trading

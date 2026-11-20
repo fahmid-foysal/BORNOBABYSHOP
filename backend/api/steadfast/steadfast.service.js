@@ -259,7 +259,6 @@ exports.webhook = async (raw) => {
     .slice(0, 100);
 
   if (
-    !invoiceMatch ||
     !Number.isSafeInteger(consignmentId) ||
     consignmentId <= 0 ||
     !status
@@ -282,12 +281,23 @@ exports.webhook = async (raw) => {
     : null;
 
   return transaction(async (db) => {
-    const key = invoiceMatch[1];
     const [sales] = await db.query(
-      "SELECT id,steadfast_consignment_id,steadfast_webhook_at FROM online_sales WHERE id=? FOR UPDATE",
-      [key],
+      `SELECT id,steadfast_consignment_id,steadfast_webhook_at
+       FROM online_sales
+       WHERE steadfast_consignment_id=?${invoiceMatch ? " OR id=?" : ""}
+       ORDER BY (steadfast_consignment_id=?) DESC
+       LIMIT 1 FOR UPDATE`,
+      invoiceMatch
+        ? [consignmentId, invoiceMatch[1], consignmentId]
+        : [consignmentId, consignmentId],
     );
-    if (!sales.length) return acknowledge(false, "Order was not found");
+    if (!sales.length)
+      return acknowledge(
+        false,
+        invoiceMatch
+          ? "Order was not found"
+          : "Consignment is not connected to an order",
+      );
 
     const s = sales[0];
     if (
@@ -303,7 +313,7 @@ exports.webhook = async (raw) => {
     )
       await db.query(
         "UPDATE online_sales SET steadfast_status=?,steadfast_delivery_charge=COALESCE(?,steadfast_delivery_charge),steadfast_webhook_at=COALESCE(?,NOW()) WHERE id=?",
-        [status, deliveryCharge, updatedAt, key],
+        [status, deliveryCharge, updatedAt, s.id],
       );
     return acknowledge(true);
   });

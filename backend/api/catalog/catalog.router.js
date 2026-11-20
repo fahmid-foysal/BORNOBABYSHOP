@@ -12,6 +12,7 @@ router.use((req, res, next) =>
     "SALES",
     "PURCHASES",
     "STOCK_ADJUSTMENTS",
+    "MARKETING_EXPENSES",
   ].some((m) => req.user.permissions.includes(m))
     ? next()
     : next(new HttpError(403, "Catalog permission required")),

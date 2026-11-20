@@ -279,21 +279,15 @@ export function DateRange({ value, onChange }) {
     next.setUTCDate(next.getUTCDate() + days);
     return next;
   };
-  const mondayOffset = (currentDate.getUTCDay() + 6) % 7;
-  const thisWeekStart = addDays(currentDate, -mondayOffset);
   const thisMonthStart = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 1));
   const lastMonthStart = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
   const lastMonthEnd = addDays(thisMonthStart, -1);
-  const thisYearStart = new Date(Date.UTC(currentDate.getUTCFullYear(), 0, 1));
-  const lastYearStart = new Date(Date.UTC(currentDate.getUTCFullYear() - 1, 0, 1));
-  const lastYearEnd = new Date(Date.UTC(currentDate.getUTCFullYear() - 1, 11, 31));
   const presets = [
-    ["Last month", format(lastMonthStart), format(lastMonthEnd)],
+    ["Today", current, current],
+    ["Last 7 days", format(addDays(currentDate, -6)), current],
+    ["Last 30 days", format(addDays(currentDate, -29)), current],
     ["This month", format(thisMonthStart), current],
-    ["Last week", format(addDays(thisWeekStart, -7)), format(addDays(thisWeekStart, -1))],
-    ["This week", format(thisWeekStart), current],
-    ["Last year", format(lastYearStart), format(lastYearEnd)],
-    ["This year", format(thisYearStart), current],
+    ["Last month", format(lastMonthStart), format(lastMonthEnd)],
   ];
   return (
     <div className="date-filter-control">
@@ -348,6 +342,7 @@ export const moduleLabels = {
   STEADFAST_PAYMENTS: "Steadfast payments",
   INCOME: "Income",
   EXPENSE: "Expenses",
+  MARKETING_EXPENSES: "Marketing expenses",
   REPORTS: "Reports & dashboard",
 };
 export function CategoryFilter({ value, onChange, categories }) {

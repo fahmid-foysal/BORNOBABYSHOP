@@ -8,12 +8,28 @@ export function DeliverySticker({ order }) {
   const consignmentId =
     order.steadfast_consignment_id ?? order.consignment_id ?? "—";
   const cod = order.steadfast_cod_amount ?? order.due ?? 0;
+  const orderDate = new Date(order.created_at || Date.now());
+  const printedDate = Number.isNaN(orderDate.getTime())
+    ? ""
+    : orderDate
+        .toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+        .replaceAll(" ", "-");
   return (
     <article className="delivery-sticker">
-      <header>
-        <strong>SF-ID: {consignmentId}</strong>
-        <b>INVOICE: ORD-{order.id}</b>
+      <header className="sticker-brand">
+        <strong>BORNO BABY SHOP</strong>
+        <b>{printedDate}</b>
       </header>
+      <div className="sticker-rule" />
+      <div className="sticker-sf-id">
+        <span>SF-ID:</span>
+        <strong>{consignmentId}</strong>
+      </div>
+      <div className="sticker-rule" />
       <div className="sticker-row">
         <span>Name:</span>
         <strong>{value(order, "cus_name", "cus_name") || "—"}</strong>

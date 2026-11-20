@@ -28,6 +28,7 @@ exports.dashboard = async (q) => {
     sales,
     cash,
     expenses,
+    marketingExpenses,
     incomes,
     purchasePayments,
     trend,
@@ -47,6 +48,10 @@ exports.dashboard = async (q) => {
     ),
     query(
       `SELECT COALESCE(SUM(amount),0) total FROM expenses WHERE ${dateFilter}`,
+      dates,
+    ),
+    query(
+      `SELECT COALESCE(SUM(amount_usd*conversion_rate),0) total FROM marketing_expenses WHERE ${dateFilter}`,
       dates,
     ),
     query(
@@ -82,7 +87,11 @@ exports.dashboard = async (q) => {
   ]);
   const salePayments = cash[0].total;
   const cashIn = round(salePayments + incomes[0].total);
-  const cashOut = round(expenses[0].total + purchasePayments[0].total);
+  const cashOut = round(
+    expenses[0].total +
+      marketingExpenses[0].total +
+      purchasePayments[0].total,
+  );
   let dailyTrend = trend;
   const dayCount =
     Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
@@ -102,12 +111,16 @@ exports.dashboard = async (q) => {
     sale_payments: salePayments,
     other_income: incomes[0].total,
     expenses: expenses[0].total,
+    marketing_expenses: marketingExpenses[0].total,
     purchase_payments: purchasePayments[0].total,
     cash_in: cashIn,
     cash_out: cashOut,
     profit: round(cashIn - cashOut),
     net_operating_profit: round(
-      sales[0].gross_profit + incomes[0].total - expenses[0].total,
+      sales[0].gross_profit +
+        incomes[0].total -
+        expenses[0].total -
+        marketingExpenses[0].total,
     ),
     current_stock_value: stockValue[0].total,
     trend: dailyTrend,
@@ -314,8 +327,300 @@ async function salesExplorer(q) {
   };
 }
 
+const listFilter = (value, parser, max = 250) => {
+  if (value == null || value === "") return [];
+  const values = [...new Set(String(value).split(",").map((part) => part.trim()).filter(Boolean))];
+  if (values.length > max) throw new HttpError(400, "Too many filter values");
+  return values.map(parser);
+};
+
+async function marketingReport(q) {
+  const { from, to } = range(q);
+  const employeeIds = listFilter(q.sales_employee_ids, (value) =>
+    z.coerce.number().int().positive().parse(value),
+  );
+  const barcodes = listFilter(q.barcodes, (value) =>
+    z.string().trim().min(1).max(100).parse(value),
+  );
+  const statuses = listFilter(q.steadfast_statuses, (value) =>
+    z.string().trim().min(1).max(100).parse(value),
+  );
+  const saleConditions = [
+    "s.status<>'returned'",
+    `s.${dateFilter}`,
+  ];
+  const saleParams = [from, to];
+  const expenseConditions = [`m.${dateFilter}`];
+  const expenseParams = [from, to];
+  if (employeeIds.length) {
+    saleConditions.push("s.sales_employee_id IN (?)");
+    saleParams.push(employeeIds);
+    expenseConditions.push("m.sales_person_id IN (?)");
+    expenseParams.push(employeeIds);
+  }
+  if (barcodes.length) {
+    saleConditions.push("p.barcode IN (?)");
+    saleParams.push(barcodes);
+    expenseConditions.push("m.barcode IN (?)");
+    expenseParams.push(barcodes);
+  }
+  if (statuses.length) {
+    saleConditions.push(
+      "COALESCE(NULLIF(TRIM(s.steadfast_status),''),'pending') IN (?)",
+    );
+    saleParams.push(statuses);
+  }
+  const soldProducts = `(SELECT DISTINCT sale_id,product_id FROM sale_line_components WHERE channel='online')`;
+  const saleFrom = `FROM online_sales s
+    JOIN ${soldProducts} sp ON sp.sale_id=s.id
+    JOIN products p ON p.id=sp.product_id
+    LEFT JOIN employees e ON e.id=s.sales_employee_id
+    WHERE ${saleConditions.join(" AND ")}`;
+  const [orderRows, expenseRows, totalStatusRows, productOptions, employeeOptions, statusOptions] =
+    await Promise.all([
+      query(
+        `SELECT p.barcode,p.product_name,s.sales_employee_id,
+          COALESCE(e.name,'Unassigned') sales_person,
+          COALESCE(NULLIF(TRIM(s.steadfast_status),''),'pending') steadfast_status,
+          COUNT(DISTINCT s.id) order_count
+         ${saleFrom}
+         GROUP BY p.barcode,p.product_name,s.sales_employee_id,e.name,steadfast_status`,
+        [...saleParams],
+      ),
+      query(
+        `SELECT m.barcode,p.product_name,m.sales_person_id sales_employee_id,e.name sales_person,
+          SUM(m.amount_usd) total_ad_expense_usd,
+          SUM(m.amount_usd*m.conversion_rate) total_ad_expense_bdt
+         FROM marketing_expenses m
+         JOIN products p ON p.barcode=m.barcode
+         JOIN employees e ON e.id=m.sales_person_id
+         WHERE ${expenseConditions.join(" AND ")}
+         GROUP BY m.barcode,p.product_name,m.sales_person_id,e.name`,
+        [...expenseParams],
+      ),
+      query(
+        `SELECT COALESCE(NULLIF(TRIM(s.steadfast_status),''),'pending') steadfast_status,
+          COUNT(DISTINCT s.id) order_count ${saleFrom}
+         GROUP BY steadfast_status`,
+        [...saleParams],
+      ),
+      query(
+        "SELECT barcode,product_name FROM products WHERE barcode IS NOT NULL AND barcode<>'' ORDER BY product_name",
+      ),
+      query("SELECT id,name FROM employees ORDER BY name"),
+      query(
+        "SELECT DISTINCT COALESCE(NULLIF(TRIM(steadfast_status),''),'pending') status_value FROM online_sales ORDER BY 1",
+      ),
+    ]);
+
+  const detailMap = new Map();
+  const detailKey = (barcode, employeeId) =>
+    `${barcode}\u0000${employeeId == null ? "unassigned" : employeeId}`;
+  const ensureDetail = (row) => {
+    const key = detailKey(row.barcode, row.sales_employee_id);
+    if (!detailMap.has(key))
+      detailMap.set(key, {
+        barcode: row.barcode,
+        product_name: row.product_name,
+        sales_employee_id: row.sales_employee_id,
+        sales_person: row.sales_person || "Unassigned",
+        order_count: 0,
+        statusCounts: {},
+        total_ad_expense_usd: 0,
+        total_ad_expense_bdt: 0,
+      });
+    return detailMap.get(key);
+  };
+  for (const row of orderRows) {
+    const detail = ensureDetail(row);
+    const count = Number(row.order_count);
+    detail.order_count += count;
+    detail.statusCounts[row.steadfast_status] =
+      (detail.statusCounts[row.steadfast_status] || 0) + count;
+  }
+  for (const row of expenseRows) {
+    const detail = ensureDetail(row);
+    detail.total_ad_expense_usd = Number(row.total_ad_expense_usd);
+    detail.total_ad_expense_bdt = Number(row.total_ad_expense_bdt);
+  }
+  const statusText = (counts) =>
+    Object.entries(counts)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(", ") || "No matching orders";
+  const publicRow = (row) => ({
+    barcode: row.barcode,
+    product_name: row.product_name,
+    ...(row.sales_person !== undefined ? { sales_person: row.sales_person } : {}),
+    order_count: row.order_count,
+    status_breakdown: statusText(row.statusCounts),
+    total_ad_expense_usd: round(row.total_ad_expense_usd),
+    average_conversion_rate: row.total_ad_expense_usd
+      ? round(row.total_ad_expense_bdt / row.total_ad_expense_usd)
+      : 0,
+    total_ad_expense_bdt: round(row.total_ad_expense_bdt),
+    ad_expense_per_order_bdt: row.order_count
+      ? round(row.total_ad_expense_bdt / row.order_count)
+      : 0,
+  });
+  const details = [...detailMap.values()]
+    .map(publicRow)
+    .sort((left, right) =>
+      left.product_name.localeCompare(right.product_name) ||
+      left.sales_person.localeCompare(right.sales_person),
+    );
+  const productMap = new Map();
+  for (const detail of detailMap.values()) {
+    if (!productMap.has(detail.barcode))
+      productMap.set(detail.barcode, {
+        barcode: detail.barcode,
+        product_name: detail.product_name,
+        order_count: 0,
+        statusCounts: {},
+        total_ad_expense_usd: 0,
+        total_ad_expense_bdt: 0,
+      });
+    const product = productMap.get(detail.barcode);
+    product.order_count += detail.order_count;
+    product.total_ad_expense_usd += detail.total_ad_expense_usd;
+    product.total_ad_expense_bdt += detail.total_ad_expense_bdt;
+    for (const [status, count] of Object.entries(detail.statusCounts))
+      product.statusCounts[status] = (product.statusCounts[status] || 0) + count;
+  }
+  const products = [...productMap.values()]
+    .map(publicRow)
+    .sort((left, right) => right.total_ad_expense_bdt - left.total_ad_expense_bdt);
+  const totalOrders = totalStatusRows.reduce(
+    (total, row) => total + Number(row.order_count),
+    0,
+  );
+  const totalUsd = expenseRows.reduce(
+    (total, row) => total + Number(row.total_ad_expense_usd),
+    0,
+  );
+  const totalBdt = expenseRows.reduce(
+    (total, row) => total + Number(row.total_ad_expense_bdt),
+    0,
+  );
+  return {
+    from,
+    to,
+    summary: {
+      total_order_count: totalOrders,
+      status_breakdown: statusText(
+        Object.fromEntries(
+          totalStatusRows.map((row) => [row.steadfast_status, Number(row.order_count)]),
+        ),
+      ),
+      selected_product_count: productMap.size,
+      total_ad_expense_usd: round(totalUsd),
+      total_ad_expense_bdt: round(totalBdt),
+      ad_expense_per_order_bdt: totalOrders ? round(totalBdt / totalOrders) : 0,
+    },
+    products,
+    details,
+    options: {
+      products: productOptions,
+      employees: employeeOptions,
+      steadfast_statuses: statusOptions.map((row) => row.status_value),
+    },
+  };
+}
+
 exports.report = async (type, q) => {
   if (type === "sales-explorer") return salesExplorer(q);
+  if (type === "marketing") return marketingReport(q);
+  if (type === "revenue-expense") {
+    const { from, to } = range(q);
+    const [salesRows, incomeRows, expenseRows, marketingRows] = await Promise.all([
+      query(
+        `SELECT DATE(s.created_at) period,
+          COALESCE(SUM(st.subtotal-s.final_discount+s.delivery_charge),0) sales_revenue,
+          COALESCE(SUM(sc.sold_purchase_cost),0) sold_purchase_cost
+         FROM all_sales s
+         JOIN (SELECT channel,sale_id,SUM(quantity*rate) subtotal FROM sale_lines GROUP BY channel,sale_id) st
+           ON BINARY st.channel=BINARY s.channel AND st.sale_id=s.id
+         LEFT JOIN (
+           SELECT channel,sale_id,SUM(GREATEST(quantity-returned_quantity,0)*cost_rate) sold_purchase_cost
+           FROM sale_components WHERE active=1 GROUP BY channel,sale_id
+         ) sc ON BINARY sc.channel=BINARY s.channel AND sc.sale_id=s.id
+         WHERE s.status<>'returned' AND s.${dateFilter}
+         GROUP BY DATE(s.created_at) ORDER BY period`,
+        [from, to],
+      ),
+      query(
+        "SELECT income_date period,COALESCE(SUM(amount),0) other_income FROM incomes WHERE income_date>=? AND income_date<=? GROUP BY income_date ORDER BY income_date",
+        [from, to],
+      ),
+      query(
+        "SELECT expense_date period,COALESCE(SUM(amount),0) operating_expenses FROM expenses WHERE expense_date>=? AND expense_date<=? GROUP BY expense_date ORDER BY expense_date",
+        [from, to],
+      ),
+      query(
+        "SELECT DATE(created_at) period,COALESCE(SUM(amount_usd*conversion_rate),0) marketing_expenses FROM marketing_expenses WHERE created_at>=? AND created_at<DATE_ADD(?,INTERVAL 1 DAY) GROUP BY DATE(created_at) ORDER BY period",
+        [from, to],
+      ),
+    ]);
+    const keyOf = (value) =>
+      value instanceof Date
+        ? value.toISOString().slice(0, 10)
+        : String(value).slice(0, 10);
+    const byDate = new Map();
+    const ensure = (period) => {
+      const key = keyOf(period);
+      if (!byDate.has(key))
+        byDate.set(key, {
+          period: key,
+          sales_revenue: 0,
+          other_income: 0,
+          total_revenue: 0,
+          operating_expenses: 0,
+          marketing_expenses: 0,
+          sold_purchase_cost: 0,
+          total_cost: 0,
+          net_profit: 0,
+          net_margin_percent: 0,
+        });
+      return byDate.get(key);
+    };
+    for (const row of salesRows)
+      Object.assign(ensure(row.period), {
+        sales_revenue: Number(row.sales_revenue),
+        sold_purchase_cost: Number(row.sold_purchase_cost),
+      });
+    for (const row of incomeRows)
+      ensure(row.period).other_income = Number(row.other_income);
+    for (const row of expenseRows)
+      ensure(row.period).operating_expenses = Number(row.operating_expenses);
+    for (const row of marketingRows)
+      ensure(row.period).marketing_expenses = Number(row.marketing_expenses);
+
+    const dayCount = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+    if (dayCount <= 730) {
+      for (let index = 0; index < dayCount; index += 1)
+        ensure(
+          new Date(Date.parse(`${from}T00:00:00Z`) + index * 86400000)
+            .toISOString()
+            .slice(0, 10),
+        );
+    }
+    const rows = [...byDate.values()]
+      .sort((a, b) => a.period.localeCompare(b.period))
+      .map((row) => {
+        row.total_revenue = round(row.sales_revenue + row.other_income);
+        row.total_cost = round(
+          row.operating_expenses +
+            row.marketing_expenses +
+            row.sold_purchase_cost,
+        );
+        row.net_profit = round(row.total_revenue - row.total_cost);
+        row.net_margin_percent = row.total_revenue
+          ? round((row.net_profit / row.total_revenue) * 100)
+          : 0;
+        return row;
+      });
+    return { from, to, rows };
+  }
   const config = reports[type];
   if (!config) throw new HttpError(404, "Unknown report");
   const { from, to } = range(q);

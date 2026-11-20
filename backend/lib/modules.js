@@ -9,5 +9,6 @@ module.exports = [
   "STEADFAST_PAYMENTS",
   "INCOME",
   "EXPENSE",
+  "MARKETING_EXPENSES",
   "REPORTS",
 ];

@@ -76,6 +76,16 @@ const defs = {
       ["narration", "Narration", "textarea"],
     ],
   },
+  marketing_expenses: {
+    title: "Marketing expenses",
+    description: "Track product advertising spend by sales person and conversion rate.",
+    fields: [
+      ["barcode", "Product", "product_barcode", true],
+      ["sales_person_id", "Sales person", "employees", true],
+      ["amount_usd", "Amount (USD)", "usd", true],
+      ["conversion_rate", "USD to BDT rate", "rate", true],
+    ],
+  },
   incomes: {
     title: "Income",
     description: "Record the other income coming into your shop.",
@@ -148,6 +158,11 @@ export default function Records({ resource: given }) {
   const change = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   function edit(row) {
     setError("");
+    const defaultConversionRate = Number(
+      lookups.configs?.find(
+        (config) => config.config_name === "DEFAULT_CONVERSION_RATE",
+      )?.amount || 130,
+    );
     setForm(
       row
         ? { ...row, password: "", permissions: row.permissions || [] }
@@ -157,6 +172,8 @@ export default function Records({ resource: given }) {
             income_date: today(),
             quantity: 1,
             salary: 0,
+            conversion_rate: defaultConversionRate,
+            amount_usd: 0,
           },
     );
     setEditing(row || {});
@@ -180,10 +197,12 @@ export default function Records({ resource: given }) {
             "expense_accounts",
             "income_accounts",
             "product",
+            "employees",
           ].includes(type)
         )
           value = value ? Number(value) : null;
-        if (["number", "signed"].includes(type)) value = Number(value || 0);
+        if (["number", "signed", "usd", "rate"].includes(type))
+          value = Number(value || 0);
         if (value !== undefined) body[key] = value;
       }
       if (resource === "users") body.permissions = form.permissions || [];
@@ -215,6 +234,16 @@ export default function Records({ resource: given }) {
   }
   const labelValue = (row, key, type) => {
     if (type === "product") return row.product_name || `Product #${row[key]}`;
+    if (type === "product_barcode")
+      return `${row.product_name || "Product"} · ${row.barcode}`;
+    if (resource === "marketing_expenses" && key === "sales_person_id")
+      return row.sales_person_name || "—";
+    if (type === "usd")
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(Number(row[key]) || 0);
+    if (type === "rate") return number(row[key]);
     if (lookups[type])
       return (
         lookups[type].find((i) => String(i.id) === String(row[key]))?.label ||
@@ -236,7 +265,7 @@ export default function Records({ resource: given }) {
               ? "WORKSPACE"
               : resource === "stock_adjustments"
                 ? "INVENTORY"
-                : resource === "expenses" || resource === "incomes"
+                : resource === "expenses" || resource === "incomes" || resource === "marketing_expenses"
                   ? "FINANCE"
                   : "MASTER DATA"}
           </span>
@@ -279,6 +308,13 @@ export default function Records({ resource: given }) {
                       <th>Module access</th>
                     </>
                   )}
+                  {resource === "marketing_expenses" && (
+                    <>
+                      <th>Amount (BDT)</th>
+                      <th>Created</th>
+                      <th>Created by</th>
+                    </>
+                  )}
                   <th className="right">Actions</th>
                 </tr>
               </thead>
@@ -309,6 +345,13 @@ export default function Records({ resource: given }) {
                             )}
                           </div>
                         </td>
+                      </>
+                    )}
+                    {resource === "marketing_expenses" && (
+                      <>
+                        <td><strong>{money(row.amount_bdt)}</strong></td>
+                        <td>{new Date(row.created_at).toLocaleString()}</td>
+                        <td>#{row.created_by}</td>
                       </>
                     )}
                     <td>
@@ -372,7 +415,7 @@ export default function Records({ resource: given }) {
               <ErrorBox message={error} />
               <div className="form-grid">
                 {def.fields.map(([key, label, type, required]) =>
-                  type === "product" ? (
+                  type === "product" || type === "product_barcode" ? (
                     <div className="field" key={key}>
                       <span>{label}</span>
                       <button
@@ -381,12 +424,16 @@ export default function Records({ resource: given }) {
                         onClick={() => setPicker(true)}
                       >
                         {form.product_name ||
-                          `Select product${form.product_id ? ` #${form.product_id}` : ""}`}
+                          (type === "product_barcode" && form.barcode
+                            ? `Product · ${form.barcode}`
+                            : `Select product${form.product_id ? ` #${form.product_id}` : ""}`)}
                       </button>
-                      <small>
-                        Use a negative quantity to remove damaged or missing
-                        stock.
-                      </small>
+                      {type === "product" && (
+                        <small>
+                          Use a negative quantity to remove damaged or missing
+                          stock.
+                        </small>
+                      )}
                     </div>
                   ) : lookups[type] ? (
                     <Select
@@ -415,15 +462,17 @@ export default function Records({ resource: given }) {
                     <Field
                       key={key}
                       label={label}
-                      type={type === "signed" ? "number" : type}
+                      type={["signed", "usd", "rate"].includes(type) ? "number" : type}
                       required={
                         required || (type === "password" && !editing.id)
                       }
-                      min={type === "number" ? 0 : undefined}
+                      min={["number", "usd"].includes(type) ? 0 : type === "rate" ? 0.0001 : undefined}
                       minLength={type === "password" ? 8 : undefined}
                       step={
-                        type === "number" || type === "signed"
-                          ? "0.001"
+                        type === "number" || type === "signed" || type === "usd"
+                          ? "0.01"
+                          : type === "rate"
+                            ? "0.0001"
                           : undefined
                       }
                       value={form[key] ?? ""}
@@ -487,7 +536,8 @@ export default function Records({ resource: given }) {
           onChange={(items) => {
             const item = items.at(-1);
             if (item) {
-              change("product_id", item.item_id);
+              if (resource === "marketing_expenses") change("barcode", item.barcode);
+              else change("product_id", item.item_id);
               change("product_name", item.name);
               setPicker(false);
             }

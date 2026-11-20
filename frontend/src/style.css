@@ -2636,42 +2636,45 @@ td small {
 .barcode-print-sheet {
   display: none;
 }
-.reports-layout {
-  display: grid;
-  grid-template-columns: 235px minmax(0, 1fr);
-  gap: 22px;
-  align-items: start;
+.reports-page-heading {
+  margin-bottom: 0;
+  padding-bottom: 16px;
 }
-.report-nav {
-  padding: 18px 12px;
-  display: grid;
-  gap: 4px;
-}
-.report-nav .eyebrow {
-  padding: 0 8px 8px;
-}
-.report-nav button {
-  background: transparent;
-  border: 0;
+.report-tabs {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  text-align: left;
-  padding: 11px 9px;
-  border-radius: 6px;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 6px 6px 0;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+.report-tabs button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 7px 7px 0 0;
+  background: transparent;
   color: var(--muted);
   font-size: 10px;
-  line-height: 1.6;
+  font-weight: 600;
+  white-space: nowrap;
 }
-.report-nav button > svg {
-  flex-shrink: 0;
+.report-tabs button:hover {
+  background: var(--surface-soft);
+  color: var(--text);
 }
-.report-nav button.selected {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: 500;
+.report-tabs button.selected {
+  background: var(--accent);
+  color: var(--surface);
 }
-.reports-layout > .panel > .panel-heading {
+.report-panel {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.report-panel > .panel-heading {
   flex-wrap: wrap;
 }
 .courier-brand {
@@ -3002,10 +3005,6 @@ td small {
   .sale-scan > .btn {
     min-height: 35px;
   }
-  .reports-layout {
-    grid-template-columns: 200px minmax(0, 1fr);
-    gap: 15px;
-  }
   .page-heading h1 {
     font-size: 26px;
   }
@@ -3107,21 +3106,6 @@ td small {
   }
   .sale-scan > .btn {
     min-height: 50px;
-  }
-  .reports-layout {
-    grid-template-columns: 1fr;
-  }
-  .report-nav {
-    display: flex;
-    overflow-x: auto;
-    padding: 10px;
-  }
-  .report-nav .eyebrow {
-    display: none;
-  }
-  .report-nav button {
-    min-width: 160px;
-    align-items: center;
   }
   .product-grid {
     grid-template-columns: repeat(3, 1fr);

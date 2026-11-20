@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Download, ChartNoAxesCombined, RotateCcw } from "lucide-react";
+import { Download, RotateCcw } from "lucide-react";
 import { defaultDates, qs, downloadCsv, downloadXlsx, downloadPdf, money, number } from "../api";
 import { useData, DateRange, Busy, ErrorBox, Empty } from "../components";
 const reports = [
@@ -521,7 +521,7 @@ export default function Reports() {
       : data?.rows || [];
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading reports-page-heading">
         <div>
           <span className="eyebrow">TURN EVERY SALE INTO AN INSIGHT</span>
           <h1>Reports</h1>
@@ -533,21 +533,21 @@ export default function Reports() {
           <button className="btn" disabled={!rows.length || loading} onClick={() => downloadPdf(rows, `borno-${type}-${dates.from}-${dates.to}.pdf`, reports.find((r) => r[0] === type)[1])}><Download size={16} />PDF</button>
         </div>
       </div>
-      <div className="reports-layout">
-        <aside className="panel report-nav">
-          <span className="eyebrow">SALES REPORTS</span>
-          {reports.map(([key, label]) => (
-            <button
-              className={type === key ? "selected" : ""}
-              key={key}
-              onClick={() => setType(key)}
-            >
-              <ChartNoAxesCombined size={17} />
-              {label}
-            </button>
-          ))}
-        </aside>
-        <section className="panel">
+      <nav className="report-tabs" aria-label="Report types" role="tablist">
+        {reports.map(([key, label]) => (
+          <button
+            className={type === key ? "selected" : ""}
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={type === key}
+            onClick={() => setType(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <section className="panel report-panel">
           <div className="panel-heading">
             <div>
               <h3>{reports.find((r) => r[0] === type)[1]}</h3>
@@ -602,8 +602,7 @@ export default function Reports() {
                 ? "Marketing expenses are converted to BDT using the rate saved on each entry. Combo sales are attributed to their actual component products."
                 : <>Discount is allocated to items by their share of the order subtotal.{explorer ? " Delivery is counted once per matching order; sold cost uses sale-time cost snapshots." : " Delivery is excluded from item sales."}</>}
           </div>
-        </section>
-      </div>
+      </section>
     </>
   );
 }

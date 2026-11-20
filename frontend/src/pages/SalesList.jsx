@@ -101,7 +101,7 @@ export default function SalesList() {
   const [steadfastStatus, setSteadfastStatus] = useState("");
   const [dates, setDates] = useState(defaultDates);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(50);
   const [selectedRows, setSelectedRows] = useState({});
   const [version, setVersion] = useState(0);
   const [dialog, setDialog] = useState(null);

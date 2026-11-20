@@ -4413,6 +4413,25 @@ td small {
     transition: none !important;
   }
 }
+@media screen {
+  /* Keep table headers attached to the viewport, not to a horizontal wrapper. */
+  .table-scroll {
+    overflow: visible;
+  }
+  .panel:has(.table-scroll) {
+    overflow: visible;
+  }
+  table > thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    background: var(--surface-soft);
+    box-shadow: 0 1px 0 var(--border);
+  }
+  .modal table > thead > tr > th {
+    z-index: 1;
+  }
+}
 @media print {
   @page {
     size: 80mm auto;

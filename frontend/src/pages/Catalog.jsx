@@ -284,16 +284,16 @@ export default function Catalog({ type }) {
                     )}
                     <td>
                       <div className="row-actions">
-                        {!combo && (
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Print product barcode"
-                            onClick={() => setBarcodePrint({ product: row, copies: 1 })}
-                          >
-                            <Printer size={16} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={`Print ${combo ? "combo" : "product"} barcode`}
+                          onClick={() =>
+                            setBarcodePrint({ product: row, copies: 1 })
+                          }
+                        >
+                          <Printer size={16} />
+                        </button>
                         <button
                           className="icon-btn"
                           title="View details"

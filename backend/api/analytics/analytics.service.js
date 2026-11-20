@@ -71,8 +71,51 @@ exports.dashboard = async (q) => {
       dates,
     ),
     query(
-      `SELECT COALESCE(c.category_name,'Uncategorized') name,SUM(GREATEST(sc.quantity-sc.returned_quantity,0)) quantity FROM sale_components sc JOIN all_sales s ON BINARY s.channel=BINARY sc.channel AND s.id=sc.sale_id LEFT JOIN categories c ON c.id=sc.category_id WHERE sc.active=1 AND s.${dateFilter} GROUP BY sc.category_id,c.category_name ORDER BY quantity DESC`,
-      dates,
+      `SELECT name,quantity FROM (
+         SELECT COALESCE(c.category_name,'Uncategorized') name,
+           SUM(l.net_quantity*ac.component_quantity) quantity
+         FROM all_sales s
+         JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
+         JOIN (
+           SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,
+             MAX(p.category_id) product_category_id,
+             SUM(slc.component_quantity) component_quantity
+           FROM sale_line_components slc
+           JOIN products p ON p.id=slc.product_id
+           GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id
+         ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
+         LEFT JOIN product_combos pc ON BINARY l.item_type=BINARY 'combo' AND pc.id=l.item_id
+         LEFT JOIN categories c ON c.id=CASE WHEN l.item_type='combo' THEN pc.category_id ELSE ac.product_category_id END
+         WHERE s.status<>'returned' AND s.${dateFilter}
+           AND (l.item_type='product' OR (l.item_type='combo' AND pc.category_id IS NOT NULL))
+         GROUP BY CASE WHEN l.item_type='combo' THEN pc.category_id ELSE ac.product_category_id END,c.category_name
+
+         UNION ALL
+
+         SELECT CONCAT('COMBO(',ac.category_names,')') name,
+           SUM(l.net_quantity*ac.component_quantity) quantity
+         FROM all_sales s
+         JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
+         JOIN (
+           SELECT cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id,
+             GROUP_CONCAT(DISTINCT COALESCE(c.category_name,'Uncategorized') ORDER BY COALESCE(c.category_name,'Uncategorized') SEPARATOR ', ') category_names,
+             SUM(cc.component_quantity) component_quantity
+           FROM (
+             SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
+               SUM(slc.component_quantity) component_quantity
+             FROM sale_line_components slc
+             JOIN products p ON p.id=slc.product_id
+             GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
+           ) cc
+           LEFT JOIN categories c ON c.id=cc.category_id
+           GROUP BY cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id
+         ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
+         LEFT JOIN product_combos pc ON pc.id=l.item_id
+         WHERE s.status<>'returned' AND s.${dateFilter}
+           AND l.item_type='combo' AND pc.category_id IS NULL
+         GROUP BY ac.category_names
+       ) category_rows ORDER BY quantity DESC`,
+      [...dates, ...dates],
     ),
     query(
       "SELECT COALESCE(e.name,'Unassigned') name,COUNT(*) orders FROM all_sales s LEFT JOIN employees e ON e.id=s.sales_employee_id WHERE s.status<>'returned' AND DATE(s.created_at)=CURDATE() GROUP BY s.sales_employee_id,e.name ORDER BY orders DESC",
@@ -198,9 +241,9 @@ async function salesExplorer(q) {
   }
   if (categoryId) {
     conditions.push(
-      "EXISTS(SELECT 1 FROM sale_line_components fsc JOIN products fp ON fp.id=fsc.product_id WHERE BINARY fsc.channel=BINARY l.channel AND fsc.sale_id=l.sale_id AND BINARY fsc.item_type=BINARY l.item_type AND fsc.sale_line_id=l.line_id AND fp.category_id=?)",
+      "((l.item_type='combo' AND EXISTS(SELECT 1 FROM product_combos fpc WHERE fpc.id=l.item_id AND fpc.category_id=?)) OR (l.item_type='product' AND EXISTS(SELECT 1 FROM sale_line_components fsc JOIN products fp ON fp.id=fsc.product_id WHERE BINARY fsc.channel=BINARY l.channel AND fsc.sale_id=l.sale_id AND BINARY fsc.item_type=BINARY l.item_type AND fsc.sale_line_id=l.line_id AND fp.category_id=?)) OR (l.item_type='combo' AND NOT EXISTS(SELECT 1 FROM product_combos fpc WHERE fpc.id=l.item_id AND fpc.category_id IS NOT NULL) AND EXISTS(SELECT 1 FROM sale_line_components fsc JOIN products fp ON fp.id=fsc.product_id WHERE BINARY fsc.channel=BINARY l.channel AND fsc.sale_id=l.sale_id AND BINARY fsc.item_type=BINARY l.item_type AND fsc.sale_line_id=l.line_id AND fp.category_id=?)))",
     );
-    params.push(categoryId);
+    params.push(categoryId, categoryId, categoryId);
   }
   if (paymentMethodId) {
     conditions.push(
@@ -281,17 +324,19 @@ async function salesExplorer(q) {
            FROM all_sales s JOIN customers cu ON cu.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id
            JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
            JOIN (
-             SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
+             SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,
+               MAX(p.category_id) product_category_id,
                SUM(slc.component_quantity) component_quantity,
                SUM(slc.component_quantity*COALESCE(sc.cost_rate,0)) unit_cost
              FROM sale_line_components slc
              JOIN products p ON p.id=slc.product_id
              LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY slc.channel AND sc.sale_id=slc.sale_id AND sc.product_id=slc.product_id
-             GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
+             GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id
            ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
-           LEFT JOIN categories c ON c.id=ac.category_id
-           WHERE ${where} AND l.item_type='product'
-           GROUP BY ac.category_id,c.category_name
+           LEFT JOIN product_combos pc ON BINARY l.item_type=BINARY 'combo' AND pc.id=l.item_id
+           LEFT JOIN categories c ON c.id=CASE WHEN l.item_type='combo' THEN pc.category_id ELSE ac.product_category_id END
+           WHERE ${where} AND (l.item_type='product' OR (l.item_type='combo' AND pc.category_id IS NOT NULL))
+           GROUP BY CASE WHEN l.item_type='combo' THEN pc.category_id ELSE ac.product_category_id END,c.category_name
 
            UNION ALL
 
@@ -317,7 +362,8 @@ async function salesExplorer(q) {
              LEFT JOIN categories c ON c.id=cc.category_id
              GROUP BY cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id
            ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
-           WHERE ${where} AND l.item_type='combo'
+           LEFT JOIN product_combos pc ON pc.id=l.item_id
+           WHERE ${where} AND l.item_type='combo' AND pc.category_id IS NULL
            GROUP BY ac.category_names
          ) category_rows ORDER BY component_quantity DESC,category`,
         [...params, ...params],

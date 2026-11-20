@@ -344,7 +344,8 @@ export default function Dashboard() {
                   />
                 )}
                 <div className="panel-bottom">
-                  Combo components count in their own categories.
+                  Categorized combos use their selected category; uncategorized
+                  combos are grouped by their component-category combination.
                 </div>
               </section>
             </div>

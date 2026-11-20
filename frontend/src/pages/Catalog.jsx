@@ -361,14 +361,24 @@ export default function Catalog({ type }) {
                   required
                 />
                 {combo ? (
-                  <Field
-                    label="Default delivery charge"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.delivery_charge}
-                    onChange={(e) => change("delivery_charge", e.target.value)}
-                  />
+                  <>
+                    <Field
+                      label="Default delivery charge"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.delivery_charge}
+                      onChange={(e) =>
+                        change("delivery_charge", e.target.value)
+                      }
+                    />
+                    <Select
+                      label="Category (optional)"
+                      value={form.category_id}
+                      onChange={(v) => change("category_id", v)}
+                      options={lookups.categories || []}
+                    />
+                  </>
                 ) : (
                   <>
                     <Field

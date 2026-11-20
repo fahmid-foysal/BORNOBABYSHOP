@@ -34,6 +34,7 @@ const comboSchema = z.object({
   description: z.string().max(10000).nullable().optional(),
   sale_price: amount,
   delivery_charge: amount.default(0),
+  category_id: id.nullable().optional(),
   items: z
     .array(z.object({ product_id: id, quantity: positive }))
     .min(1)
@@ -120,10 +121,14 @@ exports.list = async (type, q) => {
     params.push(q.status);
   }
   if (cats) {
-    where += isCombo
-      ? " AND EXISTS(SELECT 1 FROM product_combo_items ci JOIN products cp ON cp.id=ci.product_id WHERE ci.product_combo_id=p.id AND cp.category_id IN (?))"
-      : " AND p.category_id IN (?)";
-    params.push(cats);
+    if (isCombo) {
+      where +=
+        " AND (p.category_id IN (?) OR (p.category_id IS NULL AND EXISTS(SELECT 1 FROM product_combo_items ci JOIN products cp ON cp.id=ci.product_id WHERE ci.product_combo_id=p.id AND cp.category_id IN (?))))";
+      params.push(cats, cats);
+    } else {
+      where += " AND p.category_id IN (?)";
+      params.push(cats);
+    }
   }
   const table = isCombo ? "product_combos" : "products";
   const [count] = await pool.query(
@@ -154,11 +159,11 @@ exports.search = async (q) => {
   }
   if (cats) {
     where +=
-      " AND ((kind='product' AND category_id IN (?)) OR (kind='combo' AND EXISTS(SELECT 1 FROM product_combo_items ci JOIN products cp ON cp.id=ci.product_id WHERE ci.product_combo_id=u.id AND cp.category_id IN (?))))";
-    params.push(cats, cats);
+      " AND ((kind='product' AND category_id IN (?)) OR (kind='combo' AND (category_id IN (?) OR (category_id IS NULL AND EXISTS(SELECT 1 FROM product_combo_items ci JOIN products cp ON cp.id=ci.product_id WHERE ci.product_combo_id=u.id AND cp.category_id IN (?))))))";
+    params.push(cats, cats, cats);
   }
   const union =
-    "(SELECT p.id,p.barcode,p.product_name name,p.sale_price,p.default_delivery_charge delivery_charge,p.status,p.category_id,'product' kind FROM products p UNION ALL SELECT c.id,c.barcode,c.combo_name,c.sale_price,c.delivery_charge,'active',NULL,'combo' FROM product_combos c) u";
+    "(SELECT p.id,p.barcode,p.product_name name,p.sale_price,p.default_delivery_charge delivery_charge,p.status,p.category_id,'product' kind FROM products p UNION ALL SELECT c.id,c.barcode,c.combo_name,c.sale_price,c.delivery_charge,'active',c.category_id,'combo' FROM product_combos c) u";
   const [count] = await pool.query(
     `SELECT COUNT(*) total FROM ${union}${where}`,
     params,

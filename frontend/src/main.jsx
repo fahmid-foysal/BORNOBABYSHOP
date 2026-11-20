@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Palette,
   LogOut,
   Menu,
   X,
@@ -106,6 +107,12 @@ const groups = [
       ["Users & permissions", "/users", Users, "USER_MODULE"],
     ],
   },
+];
+
+const themes = [
+  { key: "light", label: "Light", Icon: Sun },
+  { key: "dark", label: "Dark", Icon: Moon },
+  { key: "teal", label: "Teal", Icon: Palette },
 ];
 
 function focusNextOnEnter(event) {
@@ -248,9 +255,10 @@ function Shell() {
   const [ready, setReady] = useState(false);
   const [lookups, setLookups] = useState({});
   const [toast, setToast] = useState(null);
-  const [theme, setTheme] = useState(
-    localStorage.getItem("bbs-theme") || "light",
-  );
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("bbs-theme");
+    return themes.some((option) => option.key === saved) ? saved : "light";
+  });
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
     localStorage.getItem("bbs-sidebar-collapsed") === "true",
@@ -258,6 +266,10 @@ function Shell() {
   const [expanded, setExpanded] = useState({ Sales: true });
   const [navSearch, setNavSearch] = useState("");
   const location = useLocation();
+  const themeIndex = themes.findIndex((option) => option.key === theme);
+  const activeTheme = themes[themeIndex];
+  const nextTheme = themes[(themeIndex + 1) % themes.length];
+  const ThemeIcon = activeTheme.Icon;
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("bbs-theme", theme);
@@ -469,10 +481,11 @@ function Shell() {
               </span>
               <button
                 className="icon-btn"
-                aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-                onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                aria-label={`${activeTheme.label} mode. Switch to ${nextTheme.label} mode`}
+                title={`${activeTheme.label} mode · Next: ${nextTheme.label}`}
+                onClick={() => setTheme(nextTheme.key)}
               >
-                {theme === "light" ? <Moon size={19} /> : <Sun size={19} />}
+                <ThemeIcon size={19} />
               </button>
               <span className="avatar small">
                 {user.name?.slice(0, 2).toUpperCase()}

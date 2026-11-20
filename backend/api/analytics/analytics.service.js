@@ -273,22 +273,54 @@ async function salesExplorer(q) {
         baseParams(),
       ),
       query(
-        `SELECT COALESCE(c.category_name,'Uncategorized') category,COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,SUM(l.quantity*ac.component_quantity) component_quantity,SUM(l.quantity*ac.unit_cost) sold_cost
-         FROM all_sales s JOIN customers cu ON cu.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id
-         JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
-         JOIN (
-           SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
-             SUM(slc.component_quantity) component_quantity,
-             SUM(slc.component_quantity*COALESCE(sc.cost_rate,0)) unit_cost
-           FROM sale_line_components slc
-           JOIN products p ON p.id=slc.product_id
-           LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY slc.channel AND sc.sale_id=slc.sale_id AND sc.product_id=slc.product_id
-           GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
-         ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
-         LEFT JOIN categories c ON c.id=ac.category_id
-         WHERE ${where}${categoryId ? " AND ac.category_id=?" : ""}
-         GROUP BY ac.category_id,c.category_name ORDER BY component_quantity DESC`,
-        categoryId ? [...params, categoryId] : baseParams(),
+        `SELECT category,row_kind,sale_count,component_quantity,sold_cost FROM (
+           SELECT COALESCE(c.category_name,'Uncategorized') category,'category' row_kind,
+             COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,
+             SUM(l.quantity*ac.component_quantity) component_quantity,
+             SUM(l.quantity*ac.unit_cost) sold_cost
+           FROM all_sales s JOIN customers cu ON cu.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id
+           JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
+           JOIN (
+             SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
+               SUM(slc.component_quantity) component_quantity,
+               SUM(slc.component_quantity*COALESCE(sc.cost_rate,0)) unit_cost
+             FROM sale_line_components slc
+             JOIN products p ON p.id=slc.product_id
+             LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY slc.channel AND sc.sale_id=slc.sale_id AND sc.product_id=slc.product_id
+             GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
+           ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
+           LEFT JOIN categories c ON c.id=ac.category_id
+           WHERE ${where} AND l.item_type='product'
+           GROUP BY ac.category_id,c.category_name
+
+           UNION ALL
+
+           SELECT CONCAT('COMBO(',ac.category_names,')') category,
+             'combo' row_kind,COUNT(DISTINCT CONCAT(s.channel,':',s.id)) sale_count,
+             SUM(l.quantity*ac.component_quantity) component_quantity,
+             SUM(l.quantity*ac.unit_cost) sold_cost
+           FROM all_sales s JOIN customers cu ON cu.id=s.customer_id LEFT JOIN employees e ON e.id=s.sales_employee_id
+           JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
+           JOIN (
+             SELECT cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id,
+               GROUP_CONCAT(DISTINCT COALESCE(c.category_name,'Uncategorized') ORDER BY COALESCE(c.category_name,'Uncategorized') SEPARATOR ', ') category_names,
+               SUM(cc.component_quantity) component_quantity,SUM(cc.unit_cost) unit_cost
+             FROM (
+               SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
+                 SUM(slc.component_quantity) component_quantity,
+                 SUM(slc.component_quantity*COALESCE(sc.cost_rate,0)) unit_cost
+               FROM sale_line_components slc
+               JOIN products p ON p.id=slc.product_id
+               LEFT JOIN sale_components sc ON BINARY sc.channel=BINARY slc.channel AND sc.sale_id=slc.sale_id AND sc.product_id=slc.product_id
+               GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
+             ) cc
+             LEFT JOIN categories c ON c.id=cc.category_id
+             GROUP BY cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id
+           ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
+           WHERE ${where} AND l.item_type='combo'
+           GROUP BY ac.category_names
+         ) category_rows ORDER BY component_quantity DESC,category`,
+        [...params, ...params],
       ),
       Promise.all([
         query("SELECT id,name FROM employees ORDER BY name"),

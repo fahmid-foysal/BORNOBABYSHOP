@@ -122,8 +122,36 @@ function valueDisplay(key, value) {
   return value ?? "—";
 }
 
-function ReportTable({ title, subtitle, rows = [] }) {
-  const keys = rows.length ? Object.keys(rows[0]) : [];
+function reportCell(key, value, row) {
+  if (key === "category" && row.row_kind === "combo") {
+    const label = String(value ?? "");
+    const categoriesAt = label.lastIndexOf("(");
+    if (categoriesAt >= 0) {
+      return (
+        <>
+          {label.slice(0, categoriesAt)}
+          <span className="report-combo-brace">(</span>
+          <span className="report-combo-category-names">
+            {label.slice(categoriesAt + 1, -1)}
+          </span>
+          <span className="report-combo-brace">)</span>
+        </>
+      );
+    }
+  }
+  return valueDisplay(key, value);
+}
+
+function ReportTable({
+  title,
+  subtitle,
+  rows = [],
+  hiddenKeys = [],
+}) {
+  const hidden = new Set(hiddenKeys);
+  const keys = rows.length
+    ? Object.keys(rows[0]).filter((key) => !hidden.has(key))
+    : [];
   const [sort, setSort] = useState(null);
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
@@ -212,7 +240,9 @@ function ReportTable({ title, subtitle, rows = [] }) {
             <tbody>
               {sortedRows.map((row, index) => (
                 <tr key={`${title}-${index}`}>
-                  {keys.map((key) => <td key={key}>{valueDisplay(key, row[key])}</td>)}
+                  {keys.map((key) => (
+                    <td key={key}>{reportCell(key, row[key], row)}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -286,7 +316,12 @@ function SalesExplorer({ data, filters, setFilters, loading }) {
       <div className="report-sections-grid">
         <ReportTable title="Daily performance" rows={data?.daily} />
         <ReportTable title="Salespeople" rows={data?.salespeople} />
-        <ReportTable title="Categories" subtitle="Combo components are counted in their product categories." rows={data?.categories} />
+        <ReportTable
+          title="Categories"
+          subtitle="Standalone products are grouped by category. Combos with the same category combination share one row."
+          rows={data?.categories}
+          hiddenKeys={["row_kind"]}
+        />
         <ReportTable title="Channels" rows={data?.channels} />
       </div>
       <ReportTable title="Products and combos" rows={data?.products} />

@@ -1073,6 +1073,13 @@ code {
   color: var(--muted);
   font-size: 9px;
 }
+.report-combo-brace {
+  color: var(--danger);
+  font-weight: 800;
+}
+.report-combo-category-names {
+  font-weight: 700;
+}
 @media (max-width: 1000px) {
   .report-filter-grid,
   .report-summary-grid {

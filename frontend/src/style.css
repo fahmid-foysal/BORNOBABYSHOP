@@ -4517,15 +4517,19 @@ td small {
     padding: 0 !important;
     background: #fff !important;
   }
+  body.printing-stickers .page > :not(.sticker-print-sheet) {
+    display: none !important;
+  }
   body.printing-stickers .delivery-sticker {
     display: flex !important;
     flex-direction: column;
     width: 2in !important;
-    height: 3in !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     box-sizing: border-box !important;
     padding: 0.045in !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     break-after: page;
     page-break-after: always;
     background: #fff !important;
@@ -4561,18 +4565,18 @@ td small {
   }
   body.printing-stickers .sticker-sf-id {
     display: flex;
-    flex-direction: column;
-    gap: 0.02in;
+    align-items: baseline;
+    gap: 0.04in;
     min-width: 0;
+    white-space: nowrap;
   }
   body.printing-stickers .sticker-sf-id span {
     font-size: 10pt;
     font-weight: 700;
   }
   body.printing-stickers .sticker-sf-id strong {
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
+    display: inline;
+    min-width: 0;
     font-size: 12.5pt;
     line-height: 1;
     white-space: nowrap;
@@ -4591,13 +4595,6 @@ td small {
     min-width: 0;
     overflow-wrap: anywhere;
   }
-  body.printing-stickers .sticker-address strong,
-  body.printing-stickers .sticker-note strong {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-  }
   body.printing-stickers .sticker-note {
     font-size: 7pt;
   }
@@ -4610,8 +4607,14 @@ td small {
     border-top: 1.5px dashed #000;
     font-size: 7pt;
   }
-  body.printing-stickers .sticker-items > span { font-weight: 700; }
-  body.printing-stickers .sticker-items ul { margin: 0; padding: 0; list-style: none; }
+  body.printing-stickers .sticker-items > span {
+    font-weight: 700;
+  }
+  body.printing-stickers .sticker-items ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
   body.printing-stickers .sticker-items li {
     margin: 0 0 0.015in;
     overflow-wrap: anywhere;
@@ -4624,7 +4627,7 @@ td small {
     align-items: baseline;
     justify-content: space-between;
     gap: 0.05in;
-    margin-top: auto;
+    margin-top: 0.035in;
     padding-top: 0.05in;
     border-top: 1.5px dashed #000;
     font-size: 10.5pt;

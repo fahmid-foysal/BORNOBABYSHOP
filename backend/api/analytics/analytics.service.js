@@ -73,7 +73,7 @@ exports.dashboard = async (q) => {
     query(
       `SELECT name,quantity FROM (
          SELECT COALESCE(c.category_name,'Uncategorized') name,
-           SUM(l.net_quantity*ac.component_quantity) quantity
+           SUM(l.quantity*ac.component_quantity) quantity
          FROM all_sales s
          JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
          JOIN (
@@ -93,7 +93,7 @@ exports.dashboard = async (q) => {
          UNION ALL
 
          SELECT CONCAT('COMBO(',ac.category_names,')') name,
-           SUM(l.net_quantity*ac.component_quantity) quantity
+           SUM(l.quantity*ac.component_quantity) quantity
          FROM all_sales s
          JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
          JOIN (

@@ -744,6 +744,7 @@ export default function SalesList() {
           selected={editItems}
           onChange={setEditItems}
           onClose={() => setEditPicker(false)}
+          elevated
         />
       )}
       {dialog && (

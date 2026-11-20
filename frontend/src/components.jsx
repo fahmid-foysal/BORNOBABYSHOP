@@ -69,7 +69,13 @@ export function Empty({
     </div>
   );
 }
-export function Modal({ title, children, onClose, wide = false }) {
+export function Modal({
+  title,
+  children,
+  onClose,
+  wide = false,
+  elevated = false,
+}) {
   const ref = useRef();
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -115,7 +121,7 @@ export function Modal({ title, children, onClose, wide = false }) {
   }, []);
   return (
     <div
-      className="overlay"
+      className={`overlay${elevated ? " overlay-elevated" : ""}`}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section
@@ -512,6 +518,7 @@ export function ItemPicker({
   selected,
   onChange,
   productsOnly = false,
+  elevated = false,
 }) {
   const { lookups } = useApp();
   const [search, setSearch] = useState("");
@@ -550,7 +557,12 @@ export function ItemPicker({
       ]);
   }
   return (
-    <Modal title="Find the right toy" onClose={onClose} wide>
+    <Modal
+      title="Find the right toy"
+      onClose={onClose}
+      wide
+      elevated={elevated}
+    >
       <div className="picker-layout">
         <div className="picker-catalog">
           <BarcodeInput productsOnly={productsOnly} onSelect={add} />

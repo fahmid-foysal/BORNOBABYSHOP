@@ -1596,6 +1596,9 @@ td small {
   align-items: center;
   justify-content: center;
 }
+.overlay.overlay-elevated {
+  z-index: 110;
+}
 .overlay:has(.overlay) {
   z-index: 101;
 }

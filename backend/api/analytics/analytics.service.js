@@ -33,7 +33,8 @@ exports.dashboard = async (q) => {
     purchasePayments,
     trend,
     people,
-    categories,
+    joyItems,
+    steadfastStatuses,
     todayPeople,
     recent,
     stockValue,
@@ -71,51 +72,23 @@ exports.dashboard = async (q) => {
       dates,
     ),
     query(
-      `SELECT name,quantity FROM (
-         SELECT COALESCE(c.category_name,'Uncategorized') name,
-           SUM(l.quantity*ac.component_quantity) quantity
-         FROM all_sales s
-         JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
-         JOIN (
-           SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,
-             MAX(p.category_id) product_category_id,
-             SUM(slc.component_quantity) component_quantity
-           FROM sale_line_components slc
-           JOIN products p ON p.id=slc.product_id
-           GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id
-         ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
-         LEFT JOIN product_combos pc ON BINARY l.item_type=BINARY 'combo' AND pc.id=l.item_id
-         LEFT JOIN categories c ON c.id=CASE WHEN l.item_type='combo' THEN pc.category_id ELSE ac.product_category_id END
-         WHERE s.status<>'returned' AND s.${dateFilter}
-           AND (l.item_type='product' OR (l.item_type='combo' AND pc.category_id IS NOT NULL))
-         GROUP BY CASE WHEN l.item_type='combo' THEN pc.category_id ELSE ac.product_category_id END,c.category_name
-
-         UNION ALL
-
-         SELECT CONCAT('COMBO(',ac.category_names,')') name,
-           SUM(l.quantity*ac.component_quantity) quantity
-         FROM all_sales s
-         JOIN sale_lines l ON BINARY l.channel=BINARY s.channel AND l.sale_id=s.id
-         JOIN (
-           SELECT cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id,
-             GROUP_CONCAT(DISTINCT COALESCE(c.category_name,'Uncategorized') ORDER BY COALESCE(c.category_name,'Uncategorized') SEPARATOR ', ') category_names,
-             SUM(cc.component_quantity) component_quantity
-           FROM (
-             SELECT slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id,
-               SUM(slc.component_quantity) component_quantity
-             FROM sale_line_components slc
-             JOIN products p ON p.id=slc.product_id
-             GROUP BY slc.channel,slc.sale_id,slc.item_type,slc.sale_line_id,p.category_id
-           ) cc
-           LEFT JOIN categories c ON c.id=cc.category_id
-           GROUP BY cc.channel,cc.sale_id,cc.item_type,cc.sale_line_id
-         ) ac ON BINARY ac.channel=BINARY l.channel AND ac.sale_id=l.sale_id AND BINARY ac.item_type=BINARY l.item_type AND ac.sale_line_id=l.line_id
-         LEFT JOIN product_combos pc ON pc.id=l.item_id
-         WHERE s.status<>'returned' AND s.${dateFilter}
-           AND l.item_type='combo' AND pc.category_id IS NULL
-         GROUP BY ac.category_names
-       ) category_rows ORDER BY quantity DESC`,
-      [...dates, ...dates],
+      `SELECT l.item_type,l.item_id,l.item_name name,
+         COUNT(DISTINCT CONCAT(l.channel,':',l.sale_id)) quantity
+       FROM sale_lines l
+       JOIN all_sales s ON BINARY s.channel=BINARY l.channel AND s.id=l.sale_id
+       WHERE s.status<>'returned' AND l.quantity>0 AND s.${dateFilter}
+       GROUP BY l.item_type,l.item_id,l.item_name
+       ORDER BY quantity DESC,name
+       LIMIT 12`,
+      dates,
+    ),
+    query(
+      `SELECT COALESCE(NULLIF(TRIM(steadfast_status),''),'pending') name,COUNT(*) quantity
+       FROM online_sales
+       WHERE status<>'returned' AND ${dateFilter}
+       GROUP BY COALESCE(NULLIF(TRIM(steadfast_status),''),'pending')
+       ORDER BY quantity DESC,name`,
+      dates,
     ),
     query(
       "SELECT COALESCE(e.name,'Unassigned') name,COUNT(*) orders FROM all_sales s LEFT JOIN employees e ON e.id=s.sales_employee_id WHERE s.status<>'returned' AND DATE(s.created_at)=CURDATE() GROUP BY s.sales_employee_id,e.name ORDER BY orders DESC",
@@ -168,7 +141,14 @@ exports.dashboard = async (q) => {
     current_stock_value: stockValue[0].total,
     trend: dailyTrend,
     people,
-    categories,
+    joy_items: joyItems.map((row) => ({
+      ...row,
+      quantity: Number(row.quantity),
+    })),
+    steadfast_statuses: steadfastStatuses.map((row) => ({
+      ...row,
+      quantity: Number(row.quantity),
+    })),
     todayPeople,
     recent,
   };

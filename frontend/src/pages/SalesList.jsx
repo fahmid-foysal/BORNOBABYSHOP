@@ -14,6 +14,7 @@ import {
   Copy,
   Pencil,
   Trash2,
+  ArrowDownAZ,
 } from "lucide-react";
 import { api, qs, money, defaultDates } from "../api";
 import {
@@ -36,6 +37,13 @@ import { StickerSheet, printStickerSheet } from "../delivery-sticker";
 const returnKey = (item) => `${item.item_type}:${item.line_id}`;
 const roundMoney = (value) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+function steadfastTone(status) {
+  const value = String(status || "pending").toLowerCase();
+  if (/deliver/.test(value)) return "steadfast-success";
+  if (/cancel|return|damage|lost/.test(value)) return "steadfast-danger";
+  if (/transit|pickup|assign|receive/.test(value)) return "steadfast-info";
+  return "steadfast-warning";
+}
 function ExpandableText({ label, text, limit = 70, highlight = false }) {
   const [expanded, setExpanded] = useState(false);
   const value = String(text || "");
@@ -108,6 +116,8 @@ export default function SalesList() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshingId, setRefreshingId] = useState(null);
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const [sortFirstProduct, setSortFirstProduct] = useState(false);
   const [steadfastOverrides, setSteadfastOverrides] = useState({});
   const [returnSelection, setReturnSelection] = useState({});
   const [returnRefund, setReturnRefund] = useState(null);
@@ -123,7 +133,7 @@ export default function SalesList() {
     loading,
     error: loadError,
   } = useData(
-    `/sales/${channel}?${qs({ search, status, steadfast_status: channel === "online" ? steadfastStatus : "", ...dates, page, limit })}`,
+    `/sales/${channel}?${qs({ search, status, steadfast_status: channel === "online" ? steadfastStatus : "", sort: channel === "online" && sortFirstProduct ? "first_item" : "newest", ...dates, page, limit })}`,
     version,
   );
   async function send(row) {
@@ -160,6 +170,39 @@ export default function SalesList() {
       notify(e.message, "error");
     } finally {
       setRefreshingId(null);
+    }
+  }
+  async function refreshVisibleSteadfast() {
+    const ids = pageRows
+      .filter((row) => row.steadfast_consignment_id)
+      .map((row) => Number(row.id));
+    if (!ids.length)
+      return notify("No visible orders have a Steadfast consignment ID", "error");
+    setRefreshingAll(true);
+    try {
+      const response = await api("/sales/online/refresh-steadfast", {
+        method: "POST",
+        body: { ids },
+      });
+      const successful = response.results.filter((result) => !result.error);
+      setSteadfastOverrides((current) => {
+        const next = { ...current };
+        for (const result of successful)
+          next[result.id] = {
+            ...next[result.id],
+            steadfast_status: result.delivery_status,
+          };
+        return next;
+      });
+      const failed = response.results.length - successful.length;
+      notify(
+        `${successful.length} Steadfast statuses refreshed${failed ? `; ${failed} failed` : ""}`,
+        failed ? "error" : "success",
+      );
+    } catch (e) {
+      notify(e.message, "error");
+    } finally {
+      setRefreshingAll(false);
     }
   }
   async function copyConsignment(consignmentId) {
@@ -259,6 +302,8 @@ export default function SalesList() {
           payment_method_id: null,
           sales_employee_id: fields.sales_employee_id ? Number(fields.sales_employee_id) : null,
           orderer_num: channel === "online" ? fields.orderer_num?.trim() || null : null,
+          orderer_whatsapp: channel === "online" ? fields.orderer_whatsapp?.trim() || null : null,
+          steadfast_lot: channel === "online" ? Number(fields.steadfast_lot || 1) : 1,
           notes: fields.notes || null,
           send_to_steadfast: false,
         },
@@ -387,6 +432,7 @@ export default function SalesList() {
                 setSteadfastStatus("");
                 setSelectedRows({});
                 setSteadfastOverrides({});
+                setSortFirstProduct(false);
               }}
             >
               {c === "offline" ? "In-store sales" : "Online sales"}
@@ -457,8 +503,43 @@ export default function SalesList() {
                 <Printer size={15} />
                 Print stickers ({selectedOrders.length})
               </button>
+              <button
+                type="button"
+                className={`btn${sortFirstProduct ? " primary" : ""}`}
+                onClick={() => {
+                  setSortFirstProduct((value) => !value);
+                  setPage(1);
+                }}
+              >
+                <ArrowDownAZ size={15} />
+                First product
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={refreshingAll || loading}
+                onClick={refreshVisibleSteadfast}
+              >
+                <RefreshCw size={15} className={refreshingAll ? "spin" : ""} />
+                {refreshingAll ? "Refreshing all" : "Refresh visible statuses"}
+              </button>
             </>
           )}
+          <label className="page-limit sales-limit">
+            Show
+            <select
+              aria-label="Rows per page"
+              value={limit}
+              onChange={(event) => {
+                setLimit(Number(event.target.value));
+                setPage(1);
+              }}
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
         </div>
         <ErrorBox message={loadError} />
         {loading ? (
@@ -497,7 +578,10 @@ export default function SalesList() {
               </thead>
               <tbody>
                 {pageRows.map((row) => (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    className={channel === "online" ? steadfastTone(row.steadfast_status) : ""}
+                  >
                     {channel === "online" && (
                       <td className="select-column">
                         <input
@@ -516,6 +600,8 @@ export default function SalesList() {
                       </strong>
                       <small>{row.created_at}</small>
                       {channel === "online" && row.orderer_num && <small>Orderer: {row.orderer_num}</small>}
+                      {channel === "online" && row.orderer_whatsapp && <small>WhatsApp: {row.orderer_whatsapp}</small>}
+                      {channel === "online" && <small>Lot: {row.steadfast_lot || 1}</small>}
                       <ExpandableText
                         label="Notes"
                         text={row.notes || "No notes"}
@@ -732,10 +818,6 @@ export default function SalesList() {
         <Pager
           data={data}
           onChange={setPage}
-          onLimitChange={(value) => {
-            setLimit(value);
-            setPage(1);
-          }}
         />
       </section>
       <StickerSheet orders={selectedOrders} />
@@ -766,10 +848,12 @@ export default function SalesList() {
                   <div className="info-note">This order is linked to Steadfast. Customer and item edits do not modify the courier booking; use the connection section below to reconnect its consignment.</div>
                 )}
                 <div className="form-grid">
-                  <Field label="Customer name" name="cus_name" defaultValue={dialog.row.cus_name} required />
+                  <Field label={`Customer name${channel === "offline" ? " (optional)" : ""}`} name="cus_name" defaultValue={dialog.row.cus_name} required={channel === "online"} />
                   <Field label="Phone" name="cus_phone" defaultValue={dialog.row.cus_phone} required />
                   <Field label="Address" name="cus_address" defaultValue={dialog.row.cus_address} required={channel === "online"} />
                   {channel === "online" && <Field label="Orderer number (optional)" name="orderer_num" maxLength={100} defaultValue={dialog.row.orderer_num || ""} />}
+                  {channel === "online" && <Field label="Orderer WhatsApp (optional)" name="orderer_whatsapp" maxLength={30} defaultValue={dialog.row.orderer_whatsapp || ""} />}
+                  {channel === "online" && <Field label="Steadfast lot" name="steadfast_lot" type="number" min="1" step="1" defaultValue={dialog.row.steadfast_lot || 1} required />}
                   <Field label="Sales person">
                     <select name="sales_employee_id" defaultValue={dialog.row.sales_employee_id || ""}>
                       <option value="">Unassigned</option>
@@ -852,6 +936,8 @@ export default function SalesList() {
                       ["Courier status", dialog.row.steadfast_status],
                       ["Consignment", dialog.row.steadfast_consignment_id],
                       ["Tracking code", dialog.row.steadfast_tracking_code],
+                      ["Steadfast lot", dialog.row.steadfast_lot || 1],
+                      ["Orderer WhatsApp", dialog.row.orderer_whatsapp],
                       [
                         "Courier delivery charge",
                         money(dialog.row.steadfast_delivery_charge),

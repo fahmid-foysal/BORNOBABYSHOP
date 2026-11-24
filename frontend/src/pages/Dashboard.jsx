@@ -11,6 +11,7 @@ import {
   CalendarDays,
   TrendingUp,
   Megaphone,
+  Truck,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -275,18 +276,18 @@ export default function Dashboard() {
                 <div className="panel-heading">
                   <div>
                     <h3>What’s bringing joy?</h3>
-                    <p>Units sold by product category</p>
+                    <p>Orders containing each product or combo</p>
                   </div>
                   <Package size={17} />
                 </div>
-                {d.categories.length ? (
+                {d.joy_items.length ? (
                   <>
                     <div className="donut-chart">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             isAnimationActive={false}
-                            data={d.categories}
+                            data={d.joy_items}
                             dataKey="quantity"
                             nameKey="name"
                             innerRadius={67}
@@ -294,9 +295,9 @@ export default function Dashboard() {
                             paddingAngle={4}
                             stroke="none"
                           >
-                            {d.categories.map((c, i) => (
+                            {d.joy_items.map((c, i) => (
                               <Cell
-                                key={c.name}
+                                key={`${c.item_type}:${c.item_id}`}
                                 fill={colors[i % colors.length]}
                               />
                             ))}
@@ -313,18 +314,18 @@ export default function Dashboard() {
                       <div className="donut-center">
                         <strong>
                           {number(
-                            d.categories.reduce(
+                            d.joy_items.reduce(
                               (s, c) => s + Number(c.quantity),
                               0,
                             ),
                           )}
                         </strong>
-                        <small>product units</small>
+                        <small>sale appearances</small>
                       </div>
                     </div>
                     <div className="chart-legend">
-                      {d.categories.map((c, i) => (
-                        <div key={c.name}>
+                      {d.joy_items.map((c, i) => (
+                        <div key={`${c.item_type}:${c.item_id}`}>
                           <span>
                             <i
                               className="legend"
@@ -340,12 +341,12 @@ export default function Dashboard() {
                 ) : (
                   <Empty
                     title="Every toy has a story"
-                    text="Category insights appear after your first sale."
+                    text="Product and combo insights appear after your first sale."
                   />
                 )}
                 <div className="panel-bottom">
-                  Categorized combos use their selected category; uncategorized
-                  combos are grouped by their component-category combination.
+                  Each product or combo counts once per order, regardless of
+                  the quantity sold in that order.
                 </div>
               </section>
             </div>
@@ -449,6 +450,68 @@ export default function Dashboard() {
                   <Empty
                     title="A fresh start today"
                     text="Today’s orders will show up as your team checks out."
+                  />
+                )}
+              </section>
+              <section className="panel steadfast-status-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h3>Steadfast delivery status</h3>
+                    <p>Online orders by current courier status</p>
+                  </div>
+                  <Truck size={18} />
+                </div>
+                {d.steadfast_statuses.length ? (
+                  <>
+                    <div className="donut-chart compact-donut">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            isAnimationActive={false}
+                            data={d.steadfast_statuses}
+                            dataKey="quantity"
+                            nameKey="name"
+                            innerRadius={60}
+                            outerRadius={86}
+                            paddingAngle={3}
+                            stroke="none"
+                          >
+                            {d.steadfast_statuses.map((status, index) => (
+                              <Cell
+                                key={status.name}
+                                fill={colors[index % colors.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              background: "var(--surface)",
+                              border: "1px solid var(--border)",
+                              borderRadius: 10,
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-legend">
+                      {d.steadfast_statuses.map((status, index) => (
+                        <div key={status.name}>
+                          <span>
+                            <i
+                              className="legend"
+                              style={{ background: colors[index % colors.length] }}
+                            />
+                            {status.name.replaceAll("_", " ")}
+                          </span>
+                          <b>{number(status.quantity)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <Empty
+                    title="No Steadfast orders yet"
+                    text="Courier statuses will appear after online orders are created."
                   />
                 )}
               </section>

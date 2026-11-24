@@ -14,7 +14,7 @@ const { totals, round, expandComponents } = require("../../lib/sale-math");
 const signedAmount = z.coerce.number().finite().min(-999999999999).max(999999999999).multipleOf(0.01);
 const saleSchema = z.object({
   customer: z.object({
-    cus_name: z.string().trim().min(1).max(255),
+    cus_name: z.string().trim().max(255).default(""),
     cus_phone: z.string().trim().min(7).max(30),
     cus_address: z.string().trim().max(5000).default(""),
   }),
@@ -35,6 +35,8 @@ const saleSchema = z.object({
   payment_method_id: id.nullable().optional(),
   sales_employee_id: id.nullable().optional(),
   orderer_num: z.string().trim().max(100).nullable().optional(),
+  orderer_whatsapp: z.string().trim().max(30).nullable().optional(),
+  steadfast_lot: z.coerce.number().int().min(1).max(10000).default(1),
   notes: z.string().max(5000).nullable().optional(),
   send_to_steadfast: z.boolean().default(true),
 });
@@ -45,6 +47,8 @@ const channel = (c) => {
 };
 exports.channel = channel;
 async function createOne(db, c, b, user) {
+  if (c === "online" && !b.customer.cus_name)
+    throw new HttpError(400, "Online orders require a customer name");
   if (c === "online" && !b.customer.cus_address)
     throw new HttpError(400, "Online orders require a delivery address");
   const value = totals(
@@ -93,7 +97,7 @@ async function createOne(db, c, b, user) {
     products.set(productId, product);
   }
   await db.query(
-    "INSERT INTO customers SET ? ON DUPLICATE KEY UPDATE cus_name=VALUES(cus_name),cus_address=VALUES(cus_address)",
+    "INSERT INTO customers SET ? ON DUPLICATE KEY UPDATE cus_name=IF(VALUES(cus_name)<>'',VALUES(cus_name),cus_name),cus_address=IF(VALUES(cus_address)<>'',VALUES(cus_address),cus_address)",
     [b.customer],
   );
   const customer = await one(db, "SELECT id FROM customers WHERE cus_phone=?", [
@@ -110,6 +114,8 @@ async function createOne(db, c, b, user) {
   if (c === "online")
     Object.assign(header, {
       orderer_num: b.orderer_num || null,
+      orderer_whatsapp: b.orderer_whatsapp || null,
+      steadfast_lot: b.steadfast_lot,
       delivery_charge: b.delivery_charge,
       steadfast_cod_amount: round(value.payable - b.paid_amount),
       steadfast_note: b.notes || null,
@@ -182,6 +188,53 @@ exports.create = async (c, raw, user) => {
   }
   return { ...(await exports.detail(c, order.id)), dispatch };
 };
+async function validateBulkStock(db, orders) {
+  const comboParts = new Map();
+  const required = new Map();
+  for (const order of orders) {
+    for (const item of order.items) {
+      let parts = [{ product_id: item.item_id, quantity: 1 }];
+      if (item.item_type === "combo") {
+        const comboKey = String(item.item_id);
+        if (!comboParts.has(comboKey)) {
+          const [rows] = await db.query(
+            "SELECT product_id,quantity FROM product_combo_items WHERE product_combo_id=?",
+            [item.item_id],
+          );
+          if (!rows.length) throw new HttpError(400, "Combo has no products");
+          comboParts.set(comboKey, rows);
+        }
+        parts = comboParts.get(comboKey);
+      }
+      for (const part of parts) {
+        const productKey = String(part.product_id);
+        required.set(
+          productKey,
+          (required.get(productKey) || 0) +
+            Number(item.quantity) * Number(part.quantity),
+        );
+      }
+    }
+  }
+  const shortages = [];
+  for (const [productId, quantity] of [...required].sort(
+    (a, b) => Number(a[0]) - Number(b[0]),
+  )) {
+    const product = await one(
+      db,
+      "SELECT p.product_name,p.status,ps.stock FROM products p JOIN product_stock ps ON ps.product_id=p.id WHERE p.id=? FOR UPDATE",
+      [productId],
+    );
+    if (product.status !== "active")
+      shortages.push(`${product.product_name}: inactive`);
+    else if (Number(product.stock) < quantity)
+      shortages.push(
+        `${product.product_name}: ${quantity} needed, ${product.stock} available`,
+      );
+  }
+  if (shortages.length)
+    throw new HttpError(409, `Insufficient stock — ${shortages.join("; ")}`);
+}
 exports.bulk = async (raw, user) => {
   const b = z
     .object({
@@ -191,6 +244,7 @@ exports.bulk = async (raw, user) => {
     .parse(raw);
   const orders = await transaction(async (db) => {
     const rows = [];
+    await validateBulkStock(db, b.orders);
     for (const order of b.orders)
       rows.push(await createOne(db, "online", order, user));
     return rows;
@@ -261,8 +315,9 @@ exports.list = async (c, q) => {
   let params = [];
   if (q.search) {
     if (c === "online") {
-      where += " AND (cu.cus_name LIKE ? OR cu.cus_phone LIKE ? OR CAST(s.id AS CHAR)=? OR s.orderer_num LIKE ? OR CAST(s.steadfast_consignment_id AS CHAR) LIKE ?)";
-      params.push(`%${q.search}%`, `%${q.search}%`, q.search, `%${q.search}%`, `%${q.search}%`);
+      const orderSearch = String(q.search).trim().replace(/^ORD-/i, "");
+      where += " AND (cu.cus_name LIKE ? OR cu.cus_phone LIKE ? OR CAST(s.id AS CHAR) LIKE ? OR s.orderer_num LIKE ? OR s.orderer_whatsapp LIKE ? OR CAST(s.steadfast_consignment_id AS CHAR) LIKE ?)";
+      params.push(`%${q.search}%`, `%${q.search}%`, `%${orderSearch}%`, `%${q.search}%`, `%${q.search}%`, `%${q.search}%`);
     } else {
       where += " AND (cu.cus_name LIKE ? OR cu.cus_phone LIKE ? OR CAST(s.id AS CHAR)=?)";
       params.push(`%${q.search}%`, `%${q.search}%`, q.search);
@@ -291,8 +346,16 @@ exports.list = async (c, q) => {
   }
   const from = `FROM ${c}_sales s JOIN customers cu ON cu.id=s.customer_id${where}`;
   const [[count]] = await pool.query(`SELECT COUNT(*) total ${from}`, params);
+  const sort =
+    c === "online"
+      ? z.enum(["newest", "first_item"]).catch("newest").parse(q.sort)
+      : "newest";
+  const orderBy =
+    sort === "first_item"
+      ? "(SELECT item_name FROM sale_lines WHERE channel='online' AND sale_id=s.id ORDER BY line_id LIMIT 1),s.id DESC"
+      : "s.id DESC";
   const [keys] = await pool.query(
-    `SELECT s.id ${from} ORDER BY s.id DESC LIMIT ? OFFSET ?`,
+    `SELECT s.id ${from} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     [...params, p.limit, p.offset],
   );
   const rows = [];
@@ -318,6 +381,8 @@ exports.update = async (c, key, raw) => {
       throw new HttpError(409, "Orders with returns cannot be edited");
     if (c === "online" && !b.customer.cus_address)
       throw new HttpError(400, "Online orders require a delivery address");
+    if (c === "online" && !b.customer.cus_name)
+      throw new HttpError(400, "Online orders require a customer name");
 
     const [returnRows] = await db.query("SELECT id FROM sale_returns WHERE channel=? AND sale_id=? LIMIT 1", [c, saleId]);
     if (returnRows.length) throw new HttpError(409, "Orders with returns cannot be edited");
@@ -348,7 +413,7 @@ exports.update = async (c, key, raw) => {
       products.set(productId, product);
     }
 
-    await db.query("INSERT INTO customers SET ? ON DUPLICATE KEY UPDATE cus_name=VALUES(cus_name),cus_address=VALUES(cus_address)", [b.customer]);
+    await db.query("INSERT INTO customers SET ? ON DUPLICATE KEY UPDATE cus_name=IF(VALUES(cus_name)<>'',VALUES(cus_name),cus_name),cus_address=IF(VALUES(cus_address)<>'',VALUES(cus_address),cus_address)", [b.customer]);
     const customer = await one(db, "SELECT id FROM customers WHERE cus_phone=?", [b.customer.cus_phone]);
     const header = {
       customer_id: customer.id,
@@ -359,6 +424,8 @@ exports.update = async (c, key, raw) => {
     };
     if (c === "online") Object.assign(header, {
       orderer_num: b.orderer_num || null,
+      orderer_whatsapp: b.orderer_whatsapp || null,
+      steadfast_lot: b.steadfast_lot,
       delivery_charge: b.delivery_charge,
       steadfast_cod_amount: round(value.payable - Number(paymentRow.paid)),
       steadfast_note: b.notes || null,

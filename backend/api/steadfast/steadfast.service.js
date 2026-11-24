@@ -67,12 +67,21 @@ exports.send = async (keys, bulk = false) => {
         "UPDATE online_sales SET steadfast_submitted_at=NOW(),steadfast_cod_amount=?,steadfast_last_error=NULL WHERE id=?",
         [cod, key],
       );
+      const [firstItems] = await db.query(
+        "SELECT item_name FROM sale_lines WHERE channel='online' AND sale_id=? ORDER BY line_id LIMIT 1",
+        [key],
+      );
+      const firstItemName = String(firstItems[0]?.item_name || "ORDER")
+        .trim()
+        .replace(/\s+/g, "_")
+        .slice(0, 120);
       rows.push({
-        invoice: `ORD-${key}`,
+        invoice: `${firstItemName}_ORD-${key}`,
         recipient_name: s.cus_name,
         recipient_phone: s.cus_phone,
         recipient_address: s.cus_address,
         cod_amount: cod,
+        total_lot: s.steadfast_lot || 1,
         note: s.steadfast_note || s.notes || "",
       });
     }
@@ -111,8 +120,9 @@ exports.send = async (keys, bulk = false) => {
           : null,
       ].filter(Boolean);
   await transaction(async (db) => {
-    for (const key of keys) {
-      const invoice = `ORD-${key}`;
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index];
+      const invoice = data[index].invoice;
       const result = results.find((r) => String(r.invoice) === invoice);
       const success =
         result && result.status === "success" && result.consignment_id;
@@ -140,7 +150,16 @@ exports.send = async (keys, bulk = false) => {
       }
     }
   });
-  return { results, response_status: response.status };
+  const orderIdByInvoice = new Map(
+    data.map((order, index) => [String(order.invoice), Number(keys[index])]),
+  );
+  return {
+    results: results.map((result) => ({
+      ...result,
+      order_id: orderIdByInvoice.get(String(result.invoice)) || null,
+    })),
+    response_status: response.status,
+  };
 };
 exports.reconcile = async (key, raw) => {
   const optionalText = (max) =>
@@ -234,6 +253,24 @@ exports.refreshStatus = async (key) => {
   });
   return response;
 };
+exports.refreshStatuses = async (raw) => {
+  const keys = z
+    .array(id)
+    .min(1)
+    .max(100)
+    .parse(raw?.ids)
+    .filter((key, index, list) => list.indexOf(key) === index);
+  const results = [];
+  for (const key of keys) {
+    try {
+      const status = await exports.refreshStatus(key);
+      results.push({ id: key, delivery_status: status.delivery_status });
+    } catch (error) {
+      results.push({ id: key, error: error.message });
+    }
+  }
+  return { results };
+};
 exports.webhook = async (raw) => {
   const acknowledge = (processed, reason) => ({
     status: "success",
@@ -251,8 +288,6 @@ exports.webhook = async (raw) => {
   if (notificationType !== "delivery_status")
     return acknowledge(false, "Webhook type ignored");
 
-  const invoice = String(raw.invoice || "").trim();
-  const invoiceMatch = invoice.match(/^ORD-(\d+)$/);
   const consignmentId = Number(raw.consignment_id);
   const status = String(raw.status_type || raw.status || "")
     .trim()
@@ -284,19 +319,14 @@ exports.webhook = async (raw) => {
     const [sales] = await db.query(
       `SELECT id,steadfast_consignment_id,steadfast_webhook_at
        FROM online_sales
-       WHERE steadfast_consignment_id=?${invoiceMatch ? " OR id=?" : ""}
-       ORDER BY (steadfast_consignment_id=?) DESC
+       WHERE steadfast_consignment_id=?
        LIMIT 1 FOR UPDATE`,
-      invoiceMatch
-        ? [consignmentId, invoiceMatch[1], consignmentId]
-        : [consignmentId, consignmentId],
+      [consignmentId],
     );
     if (!sales.length)
       return acknowledge(
         false,
-        invoiceMatch
-          ? "Order was not found"
-          : "Consignment is not connected to an order",
+        "Consignment is not connected to an order",
       );
 
     const s = sales[0];
@@ -394,26 +424,15 @@ exports.importPayment = async (paymentId, user) => {
         already_applied++;
         continue;
       }
-      const invoiceId = c.invoice.match(/^ORD-(\d+)$/)?.[1];
       const [sales] = await db.query(
-        "SELECT * FROM online_sales WHERE steadfast_consignment_id=? OR id=? FOR UPDATE",
-        [c.consignment_id, invoiceId || 0],
+        "SELECT * FROM online_sales WHERE steadfast_consignment_id=? FOR UPDATE",
+        [c.consignment_id],
       );
-      if (sales.length > 1)
-        throw new HttpError(
-          409,
-          `Conflicting invoice and consignment for ${c.invoice}`,
-        );
       if (!sales.length) {
         unmatched.push(c);
         continue;
       }
       const sale = sales[0];
-      if (
-        sale.steadfast_consignment_id &&
-        String(sale.steadfast_consignment_id) !== String(c.consignment_id)
-      )
-        throw new HttpError(409, `Consignment mismatch for ${c.invoice}`);
       await insert(db, "online_sale_payments", {
         online_sale_id: sale.id,
         payment_method_id: methodId,

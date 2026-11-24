@@ -37,6 +37,8 @@ export default function SaleEntry({ channel }) {
   const [employee, setEmployee] = useState("");
   const [notes, setNotes] = useState("");
   const [ordererNum, setOrdererNum] = useState("");
+  const [ordererWhatsapp, setOrdererWhatsapp] = useState("");
+  const [steadfastLot, setSteadfastLot] = useState(1);
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState("amount");
   const [picker, setPicker] = useState(false);
@@ -174,6 +176,8 @@ export default function SaleEntry({ channel }) {
           payment_method_id: method ? Number(method) : null,
           sales_employee_id: employee ? Number(employee) : null,
           orderer_num: online ? ordererNum.trim() || null : null,
+          orderer_whatsapp: online ? ordererWhatsapp.trim() || null : null,
+          steadfast_lot: online ? Number(steadfastLot) : 1,
           notes,
           send_to_steadfast: send,
         },
@@ -208,6 +212,8 @@ export default function SaleEntry({ channel }) {
     setPaid(0);
     setNotes("");
     setOrdererNum("");
+    setOrdererWhatsapp("");
+    setSteadfastLot(1);
     setError("");
   }
   return (
@@ -315,8 +321,8 @@ export default function SaleEntry({ channel }) {
                 </div>
               </Field>
               <Field
-                label="Customer name"
-                required
+                label={`Customer name${online ? "" : " (optional)"}`}
+                required={online}
                 value={customer.cus_name}
                 onChange={(e) =>
                   setCustomer({ ...customer, cus_name: e.target.value })
@@ -324,13 +330,23 @@ export default function SaleEntry({ channel }) {
                 placeholder="Full name"
               />
               {online && (
-                <Field
-                  label="Orderer number (optional)"
-                  value={ordererNum}
-                  maxLength={100}
-                  onChange={(e) => setOrdererNum(e.target.value)}
-                  placeholder="External order/customer reference"
-                />
+                <>
+                  <Field
+                    label="Orderer number (optional)"
+                    value={ordererNum}
+                    maxLength={100}
+                    onChange={(e) => setOrdererNum(e.target.value)}
+                    placeholder="External order/customer reference"
+                  />
+                  <Field
+                    label="Orderer WhatsApp (optional)"
+                    type="tel"
+                    value={ordererWhatsapp}
+                    maxLength={30}
+                    onChange={(e) => setOrdererWhatsapp(e.target.value)}
+                    placeholder="WhatsApp number"
+                  />
+                </>
               )}
               <Field label={`Address${online ? "" : " (optional)"}`}>
                 <textarea
@@ -455,16 +471,27 @@ export default function SaleEntry({ channel }) {
                 </div>
               </div>
               {online && (
-                <Field
-                  label="Delivery charge"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={delivery}
-                  onChange={(e) => setDelivery(e.target.value)}
-                  required
-                  hint="Pre-filled from item defaults; adjust for this delivery."
-                />
+                <div className="form-grid">
+                  <Field
+                    label="Delivery charge"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={delivery}
+                    onChange={(e) => setDelivery(e.target.value)}
+                    required
+                    hint="Pre-filled from item defaults; adjust for this delivery."
+                  />
+                  <Field
+                    label="Steadfast lot"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={steadfastLot}
+                    onChange={(e) => setSteadfastLot(e.target.value)}
+                    required
+                  />
+                </div>
               )}
               <Select
                 label="Payment method"

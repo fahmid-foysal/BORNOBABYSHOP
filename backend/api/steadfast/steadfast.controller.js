@@ -3,5 +3,6 @@ exports.webhook = (req) => s.webhook(req.body);
 exports.send = (req) => s.send([req.params.id]);
 exports.reconcile = (req) => s.reconcile(req.params.id, req.body);
 exports.refreshStatus = (req) => s.refreshStatus(req.params.id);
+exports.refreshStatuses = (req) => s.refreshStatuses(req.body);
 exports.list = (req) => s.list(req.query);
 exports.importPayment = (req) => s.importPayment(req.body.payment_id, req.user);

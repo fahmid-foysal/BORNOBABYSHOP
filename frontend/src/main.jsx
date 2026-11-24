@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { api, today } from "./api";
 import { AppContext, ErrorBox, Busy, moduleLabels, useApp } from "./components";
+import CalculatorDrawer from "./calculator";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Records = lazy(() => import("./pages/Records"));
 const Catalog = lazy(() => import("./pages/Catalog"));
@@ -646,6 +647,7 @@ function Shell() {
           </footer>
         </div>
       </div>
+      <CalculatorDrawer />
       {toast && (
         <div role="status" className={`toast ${toast.type}`}>
           <CheckCircle2 size={19} />

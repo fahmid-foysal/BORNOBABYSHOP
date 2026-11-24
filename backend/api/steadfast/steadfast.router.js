@@ -18,6 +18,12 @@ router.post("/webhooks/steadfast", async (req, res) => {
   res.status(200).json({ success: true, data });
 });
 router.post(
+  "/sales/online/refresh-steadfast",
+  checkToken,
+  authorize("SALES"),
+  action(c.refreshStatuses),
+);
+router.post(
   "/sales/online/:id/send-steadfast",
   checkToken,
   authorize("SALES"),

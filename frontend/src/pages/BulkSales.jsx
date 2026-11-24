@@ -61,7 +61,7 @@ export default function BulkSales() {
       const printable = data.orders
         .map((created, index) => {
           const courier = data.dispatch?.results?.find(
-            (entry) => entry.invoice === `ORD-${created.id}`,
+            (entry) => Number(entry.order_id) === Number(created.id),
           );
           if (courier?.status !== "success" || !courier.consignment_id)
             return null;
@@ -187,6 +187,7 @@ export default function BulkSales() {
             <strong>A few details before you import</strong>
             <p>
               Keep phone numbers as text to preserve the leading zero.
+              orderer_whatsapp and steadfast_lot are optional; lot defaults to 1.
               In Mode 1, customer details, orderer_num, total_paid, cod_amount and notes may
               be entered on only one row per order; product_name is optional and
               informational only. Item rows beneath may leave those fields blank. In Mode 2,
@@ -232,6 +233,8 @@ export default function BulkSales() {
                       <td>
                         <strong>{o.order_ref}</strong>
                         {o.orderer_num && <small>Orderer: {o.orderer_num}</small>}
+                        {o.orderer_whatsapp && <small>WhatsApp: {o.orderer_whatsapp}</small>}
+                        <small>Steadfast lot: {o.steadfast_lot || 1}</small>
                       </td>
                       <td>
                         {o.customer.cus_name}
@@ -293,7 +296,7 @@ export default function BulkSales() {
               <Truck size={23} />
               <div>
                 <strong>Send this batch to Steadfast</strong>
-                <small>Successful orders use their new ORD-ID as invoice</small>
+                <small>Invoice uses first item name followed by ORD-ID</small>
               </div>
               <input
                 type="checkbox"
@@ -361,7 +364,7 @@ export default function BulkSales() {
                 <tbody>
                   {result.orders.map((o) => {
                     const courier = result.dispatch?.results?.find(
-                      (r) => r.invoice === `ORD-${o.id}`,
+                      (r) => Number(r.order_id) === Number(o.id),
                     );
                     return (
                       <tr key={o.id}>

@@ -18,6 +18,8 @@ const modeHeaders = {
     "customer_phone",
     "customer_address",
     "orderer_num",
+    "orderer_whatsapp",
+    "steadfast_lot",
     "total_paid",
     "cod_amount",
     "item_type",
@@ -31,6 +33,8 @@ const modeHeaders = {
   mode2: [
     ...commonValueFields,
     "orderer_num",
+    "orderer_whatsapp",
+    "steadfast_lot",
     "rate",
     "discount",
     "delivery_charge",
@@ -49,6 +53,8 @@ export const bulkTemplates = {
       customer_phone: "",
       customer_address: "",
       orderer_num: "",
+      orderer_whatsapp: "",
+      steadfast_lot: 1,
       total_paid: "",
       cod_amount: "",
       item_type: "product",
@@ -65,6 +71,8 @@ export const bulkTemplates = {
       customer_phone: "01712345678",
       customer_address: "Dhanmondi, Dhaka",
       orderer_num: "WEB-CUSTOMER-1001",
+      orderer_whatsapp: "01712345678",
+      steadfast_lot: 1,
       total_paid: 0,
       cod_amount: 1000,
       item_type: "combo",
@@ -83,6 +91,8 @@ export const bulkTemplates = {
     customer_phone: "01712345678",
     customer_address: "Dhanmondi, Dhaka",
     orderer_num: "WEB-CUSTOMER-1001",
+    orderer_whatsapp: "01712345678",
+    steadfast_lot: 1,
     item_type: "product",
     barcode: "A1B2C",
     quantity: 2,
@@ -100,6 +110,8 @@ export const bulkTemplates = {
     customer_phone: "01712345678",
     customer_address: "Dhanmondi, Dhaka",
     orderer_num: "WEB-CUSTOMER-1001",
+    orderer_whatsapp: "01712345678",
+    steadfast_lot: 1,
     item_type: "combo",
     barcode: "D3E4F",
     quantity: 1,
@@ -248,6 +260,8 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
   if (parsed.errors.length) throw new Error(parsed.errors[0].message);
   const optionalHeaders = new Set([
     "orderer_num",
+    "orderer_whatsapp",
+    "steadfast_lot",
     ...(mode === "mode1" ? ["notes", "product_name"] : []),
   ]);
   const requiredHeaders = expectedHeaders.filter(
@@ -313,9 +327,22 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
       customer_phone: String(row.customer_phone).trim(),
       customer_address: String(row.customer_address).trim(),
       orderer_num: String(row.orderer_num ?? "").trim(),
+      orderer_whatsapp: String(row.orderer_whatsapp ?? "").trim(),
+      steadfast_lot:
+        String(row.steadfast_lot ?? "").trim() === ""
+          ? mode === "mode1"
+            ? null
+            : 1
+          : numberValue("steadfast_lot"),
       payment_method_id: paymentMethodId,
       sales_employee_id: salesEmployeeId,
     };
+    if (
+      commonHeader.steadfast_lot != null &&
+      (!Number.isInteger(commonHeader.steadfast_lot) ||
+        commonHeader.steadfast_lot < 1)
+    )
+      fail("steadfast_lot must be a whole number of at least 1");
     const header = mode === "mode1"
       ? {
           ...commonHeader,
@@ -339,6 +366,8 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
         "customer_phone",
         "customer_address",
         "orderer_num",
+        "orderer_whatsapp",
+        "steadfast_lot",
         "total_paid",
         "cod_amount",
         "notes",
@@ -419,6 +448,8 @@ export async function parseSalesCsv(file, mode = "mode2", lookups = {}) {
       payment_method_id: group.header.payment_method_id,
       sales_employee_id: group.header.sales_employee_id,
       orderer_num: group.header.orderer_num || null,
+      orderer_whatsapp: group.header.orderer_whatsapp || null,
+      steadfast_lot: group.header.steadfast_lot || 1,
       notes: group.header.notes,
       items: group.items,
       final_discount: finalDiscount,
